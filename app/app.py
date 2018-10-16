@@ -3,6 +3,7 @@ Dockless origin/destination trip data API
 '''
 import argparse
 import json
+import os
 import pdb
 
 from flask import Flask, jsonify
@@ -11,7 +12,10 @@ from shapely.geometry import Point, shape, asPolygon, mapping
 from shapely.ops import cascaded_union
 
 
-with open("data/grid.json", "r") as fin:
+dirname = os.path.dirname(__file__)
+source = os.path.join(dirname, 'data/grid.json')
+
+with open(source, "r") as fin:
 
     data = json.loads(fin.read())
 
@@ -22,7 +26,7 @@ with open("data/grid.json", "r") as fin:
     app = Flask(__name__)
     api = Api(app)
 
-    
+
 def parse_coordinates(xy_string):
     elements = xy_string.split(',')
     elements = [float(elem) for elem in elements]
