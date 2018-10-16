@@ -19,12 +19,14 @@ with open(source, "r") as fin:
     data = json.loads(fin.read())
 
     parser = reqparse.RequestParser()
+
     parser.add_argument(
         "xy",
         required=True,
         type=str,
         help="Coordinate string missing or unable to convert to decimal value. Must be formatted as comma-separated string in format x,y,x,y...",
     )
+    
     parser.add_argument(
         "mode",
         type=str,
