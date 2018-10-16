@@ -52,7 +52,7 @@ def get_intersect_features(query_geom, grid):
         poly = shape(feature["geometry"])
 
         if query_geom.intersects(poly):
-            ids.append(feature)
+            ids.append(feature["properties"]["id"])
             polys.append(poly)
 
     return ids, polys
