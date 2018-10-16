@@ -1,5 +1,6 @@
 gunicorn
 flask
 flask_restful
+flask-cors
 requests
 shapely

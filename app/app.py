@@ -8,6 +8,7 @@ import pdb
 
 from flask import Flask, jsonify
 from flask_restful import Resource, Api, reqparse
+from flask_cors import CORS
 from shapely.geometry import Point, shape, asPolygon, mapping
 from shapely.ops import cascaded_union
 
@@ -36,6 +37,7 @@ with open(source, "r") as fin:
 
     app = Flask(__name__)
     api = Api(app)
+    cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
 def parse_coordinates(xy_string):
