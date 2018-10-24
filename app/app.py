@@ -1,14 +1,18 @@
 """
 Dockless origin/destination trip data API
+
+# try me
+http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
+
 """
 import argparse
 import json
 import os
-import pdb
 
-from flask import Flask, jsonify
-from flask_restful import Resource, Api, reqparse
-from flask_cors import CORS
+from sanic import Sanic
+from sanic import response
+from sanic import exceptions
+from sanic_cors import CORS, cross_origin
 from shapely.geometry import Point, shape, asPolygon, mapping
 from shapely.ops import cascaded_union
 
@@ -16,35 +20,44 @@ dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/grid.json")
 
 with open(source, "r") as fin:
-
     data = json.loads(fin.read())
+    app = Sanic(__name__)
+    CORS(app)
 
-    parser = reqparse.RequestParser()
 
-    parser.add_argument(
-        "xy",
-        required=True,
-        type=str,
-        help="Coordinate string missing or unable to convert to decimal value. Must be formatted as comma-separated string in format x,y,x,y...",
-    )
+
+def parse_flow(args):
+    print(args.get("flow"))
+    if not args.get("flow") or args.get("flow") == "origin":
+        return "origin"
+    elif args.get("flow") == "destination":
+        return "destintation"
+    else:
+        raise exceptions.ServerError("Unsupported flow specified", status_code=500)
+
+
+def parse_coordinates(args):
+    if not args.get("xy"):
+        raise exceptions.ServerError("XY parameter is requried.", status_code=500)
+
+    elements = args.get("xy").split(",")
     
-    parser.add_argument(
-        "mode",
-        type=str,
-        choices=["origin", "destination"],
-        help="Mode string must be one of (origin, destination)",
-    )
-
-    app = Flask(__name__)
-    api = Api(app)
-    cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
-
-
-def parse_coordinates(xy_string):
-    elements = xy_string.split(",")
-    elements = [float(elem) for elem in elements]
+    try:
+        elements = [float(elem) for elem in elements]
+    except ValueError:
+        raise exceptions.ServerError("Unable to handle xy. Verify that xy is a comma-separated string of numbers.", status_code=500)
+    
     return [tuple(elements[x : x + 2]) for x in range(0, len(elements), 2)]
 
+
+def get_query_geom(coords):
+    if len(coords) == 1:
+        return Point(coords)
+    elif len(coords) > 2:
+        return asPolygon(coords)
+    else:
+        raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
+        
 
 def get_intersect_features(query_geom, grid):
     ids = []
@@ -60,17 +73,15 @@ def get_intersect_features(query_geom, grid):
     return ids, polys
 
 
-def get_trip_features(source_ids, grid, mode="origin"):
+def get_trip_features(source_ids, grid, flow):
     # used to collect trip count values from grid cells that match a source cell
     trip_features_lookup = {}
     total_trips = 0
 
-    if mode == "origin":
+    if flow == "origin":
         key = "start_grid_ids"
-    elif mode == "destination":
+    elif flow == "destination":
         key = "end_grid_ids"
-    else:
-        raise Exception("Invalid mode requested")
 
     # check all grid cells to see if they have trips connected to any of the source ID cells
     for feature in grid["features"]:
@@ -100,31 +111,26 @@ def get_trip_features(source_ids, grid, mode="origin"):
     return {"features": trip_features, "total_trips": total_trips}
 
 
-class Api(Resource):
-    def get(self):
-        args = parser.parse_args()
+@app.get("/v1/trips")
+async def trip_handler(request):
+    print(request.args)
 
-        if args.get("mode"):
-            mode = args.mode
-        else:
-            mode = "origin"
+    flow = parse_flow(request.args)
 
-        coords = parse_coordinates(args.xy)
+    coords = parse_coordinates(request.args)
+    
+    query_geom = get_query_geom(coords)
 
-        if len(coords) == 1:
-            query_geom = Point(coords)
-        else:
-            query_geom = asPolygon(coords)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, data)
 
-        intersect_ids, intersect_polys = get_intersect_features(query_geom, data)
-        trip_features = get_trip_features(intersect_ids, data, mode=mode)
-        intersect_poly = cascaded_union(intersect_polys)
-        trip_features["intersect_feature"] = mapping(intersect_poly)
+    trip_features = get_trip_features(intersect_ids, data, flow)
 
-        return jsonify(trip_features)
+    intersect_poly = cascaded_union(intersect_polys)
 
+    trip_features["intersect_feature"] = mapping(intersect_poly)
 
-api.add_resource(Api, "/api")
+    return response.json(trip_features)
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=True)
+

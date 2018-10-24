@@ -1,6 +1,5 @@
 gunicorn
-flask
-flask_restful
-flask-cors
 requests
+sanic
+sanic_cors
 shapely
