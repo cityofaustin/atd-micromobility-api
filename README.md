@@ -1,5 +1,5 @@
 # dockless-api
-A dockless mobility data API built with Python/Flask
+A dockless mobility data API built with Python/Sanic
 
 ## Installation
 ** Requires Python 3.6+ **
