@@ -16,5 +16,5 @@ python app/app.py
 
 4. Make a request:
 ```shell
-curl http://localhost:5000/api?xy=-97.75094341278084,30.276185988411257&mode=destination
+curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 ```
