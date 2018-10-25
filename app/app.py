@@ -27,11 +27,10 @@ with open(source, "r") as fin:
 
 
 def parse_flow(args):
-    print(args.get("flow"))
     if not args.get("flow") or args.get("flow") == "origin":
         return "origin"
     elif args.get("flow") == "destination":
-        return "destintation"
+        return "destination"
     else:
         raise exceptions.ServerError("Unsupported flow specified", status_code=500)
 
@@ -113,9 +112,9 @@ def get_trip_features(source_ids, grid, flow):
 
 @app.get("/v1/trips")
 async def trip_handler(request):
-    print(request.args)
 
     flow = parse_flow(request.args)
+    print("******************* {} **************".format(flow))
 
     coords = parse_coordinates(request.args)
     
