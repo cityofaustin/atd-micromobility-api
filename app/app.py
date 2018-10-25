@@ -114,7 +114,6 @@ def get_trip_features(source_ids, grid, flow):
 async def trip_handler(request):
 
     flow = parse_flow(request.args)
-    print("******************* {} **************".format(flow))
 
     coords = parse_coordinates(request.args)
     
