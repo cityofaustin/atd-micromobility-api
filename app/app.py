@@ -4,11 +4,14 @@ Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 
+TODO: check origin/destinon logic
+TODO: tests
 """
 import argparse
 import json
 import os
 
+from rtree import index
 from sanic import Sanic
 from sanic import response
 from sanic import exceptions
@@ -16,14 +19,16 @@ from sanic_cors import CORS, cross_origin
 from shapely.geometry import Point, shape, asPolygon, mapping
 from shapely.ops import cascaded_union
 
-dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/grid.json")
 
-with open(source, "r") as fin:
-    data = json.loads(fin.read())
-    app = Sanic(__name__)
-    CORS(app)
+def spatial_index(features):
+    # create spatial index of grid cell features
+    # featues: geojson feature array
+    # todo: use shapely STRtree !
+    idx = index.Index()
+    for pos, feature in enumerate(features):
+        idx.insert(pos, shape(feature["geometry"]).bounds)
 
+    return idx
 
 
 def parse_flow(args):
@@ -32,7 +37,18 @@ def parse_flow(args):
     elif args.get("flow") == "destination":
         return "destination"
     else:
-        raise exceptions.ServerError("Unsupported flow specified", status_code=500)
+        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
+
+
+def parse_mode(args):
+    if not args.get("mode") or args.get("mode") == "all":
+        return "all"
+    elif args.get("mode") == "scooter":
+        return "scooter"
+    elif args.get("mode") == "bicycle":
+        return "bicycle"
+    else:
+        raise exceptions.ServerError("Unsupported mode specified. Must be either scooter, bicycle, or all (default).", status_code=500)
 
 
 def parse_coordinates(args):
@@ -58,16 +74,24 @@ def get_query_geom(coords):
         raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
         
 
-def get_intersect_features(query_geom, grid):
+def get_intersect_features(query_geom, grid, idx):
+    # get the grid cells that intersect with the request geometry
+    # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
     polys = []
 
-    for feature in grid["features"]:
-        poly = shape(feature["geometry"])
+    for coord in query_geom.coords:
+        print(coord)
 
-        if query_geom.intersects(poly):
-            ids.append(feature["properties"]["id"])
-            polys.append(poly)
+        # reduce intersection feature set with rtree (this tests polygon bbox intersection)
+        for intersect_pos in idx.intersection(coord):
+            grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
+            poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
+            
+            # check if poly actually interesects with request geom
+            if query_geom.intersects(poly):
+                ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
+                polys.append(poly)
 
     return ids, polys
 
@@ -82,32 +106,39 @@ def get_trip_features(source_ids, grid, flow):
     elif flow == "destination":
         key = "end_grid_ids"
 
-    # check all grid cells to see if they have trips connected to any of the source ID cells
-    for feature in grid["features"]:
-        if key in feature["properties"]:
-            for trip_grid_id in feature["properties"][key].keys():
-                for grid_id in source_ids:
+    # extract related features from each connected one
+    for source_id in source_ids:
 
-                    if trip_grid_id == grid_id:
-                        feature_id = feature["properties"]["id"]
-                        if feature_id not in trip_features_lookup:
-                            # add feature to collection of matching features
-                            feature["properties"]["current_count"] = 0
-                            trip_features_lookup[feature_id] = feature
+        if key in grid["FeatureIndex"][source_id]["properties"]:
 
-                        feature["properties"]["current_count"] += feature["properties"][
-                            key
-                        ][trip_grid_id]["count"]
-                        # copy trip count to "total_trips"
-                        total_trips += feature["properties"][key][trip_grid_id]["count"]
+            for trip_grid_id in grid["FeatureIndex"][source_id]["properties"][key].keys():
+                count = grid["FeatureIndex"][source_id]["properties"][key][trip_grid_id]["count"]
 
-    # assemble matched features back into geojson structure
-    trip_features = {"type": "FeatureCollection", "features": []}
+                if trip_grid_id not in trip_features_lookup:
+                    # drop all feature properties except current count
+                    trip_features_lookup[trip_grid_id] = dict(grid["FeatureIndex"][trip_grid_id])
+                    trip_features_lookup[trip_grid_id]["properties"] = { "current_count" : 0 }
 
-    for grid_id in trip_features_lookup.keys():
-        trip_features["features"].append(trip_features_lookup[grid_id])
+                trip_features_lookup[trip_grid_id]["properties"]["current_count"] += count                
+
+                total_trips += count
+    
+    # assemble matched features into geojson structure
+    trip_features = {"type": "FeatureCollection" } 
+
+    trip_features["features"] = [trip_features_lookup[key] for key in trip_features_lookup.keys()]
 
     return {"features": trip_features, "total_trips": total_trips}
+
+
+dirname = os.path.dirname(__file__)
+source = os.path.join(dirname, "data/hex1000_all_INDEXED_MODE.json")
+
+with open(source, "r") as fin:
+    data = json.loads(fin.read())   
+    idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
+    app = Sanic(__name__)
+    CORS(app)
 
 
 @app.get("/v1/trips")
@@ -115,11 +146,13 @@ async def trip_handler(request):
 
     flow = parse_flow(request.args)
 
+    mode = parse_mode(request.args)
+
     coords = parse_coordinates(request.args)
     
     query_geom = get_query_geom(coords)
 
-    intersect_ids, intersect_polys = get_intersect_features(query_geom, data)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
 
     trip_features = get_trip_features(intersect_ids, data, flow)
 
@@ -128,6 +161,7 @@ async def trip_handler(request):
     trip_features["intersect_feature"] = mapping(intersect_poly)
 
     return response.json(trip_features)
+    
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True, workers=8)
