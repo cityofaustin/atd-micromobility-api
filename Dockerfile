@@ -1,3 +1,6 @@
+
+
+
 FROM python:3.6
 
 #  Set the working directory
@@ -16,4 +19,5 @@ RUN python -m pip install wheel
 #  Install python packages specified in requirements.txt
 RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
-CMD [ "python", "/usr/local/bin/gunicorn", "app:app", "-b 0.0.0.0:5000" ]
+CMD [ "gunicorn", "app:app", "-b 0.0.0.0:5000", "--worker-class", "sanic.worker.GunicornWorker" ]
+
