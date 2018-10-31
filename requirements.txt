@@ -1,5 +1,6 @@
 gunicorn
 requests
+rtree
 sanic
 sanic_cors
 shapely
