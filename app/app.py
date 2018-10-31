@@ -118,17 +118,18 @@ def get_trip_features(intersect_ids, grid, flow, mode):
 
                 count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
 
-                if trip_cell_id not in trip_features_lookup:
-                    '''
-                    Add a new entry in the trip features lookup, dropping all feature
-                    properties except current count
-                    '''
-                    trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                    trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
+                if count:
+                    if trip_cell_id not in trip_features_lookup:
+                        '''
+                        Add a new entry in the trip features lookup, dropping all feature
+                        properties except current count
+                        '''
+                        trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
+                        trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
 
-                trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count                
+                    trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count                
 
-                total_trips += count
+                    total_trips += count
     
     # assemble matched features into geojson structure
     trip_features = {"type": "FeatureCollection" } 
