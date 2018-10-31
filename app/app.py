@@ -84,18 +84,17 @@ def get_intersect_features(query_geom, grid, idx):
         coords = query_geom.exterior.coords
     else:
         coords = query_geom.coords
-        
-    for coord in coords:
 
-        # reduce intersection feature set with rtree (this tests polygon bbox intersection)
-        for intersect_pos in idx.intersection(coord):
-            grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
-            poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
-            
-            # check if poly actually interesects with request geom
-            if query_geom.intersects(poly):
-                ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
-                polys.append(poly)
+    # reduce intersection feature set with rtree (this tests polygon bbox intersection)
+    for intersect_pos in idx.intersection(query_geom.bounds):
+
+        grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
+        poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
+        
+        # check if poly actually interesects with request geom
+        if query_geom.intersects(poly):
+            ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
+            polys.append(poly)
 
     return ids, polys
 
