@@ -144,7 +144,7 @@ def get_trip_features(intersect_ids, grid, flow, mode):
 
 
 dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/hex1000_all_INDEXED_MODE.json")
+source = os.path.join(dirname, "data/grid.json")
 
 with open(source, "r") as fin:
     data = json.loads(fin.read())   
