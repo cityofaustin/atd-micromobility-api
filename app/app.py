@@ -16,7 +16,7 @@ from sanic import Sanic
 from sanic import response
 from sanic import exceptions
 from sanic_cors import CORS, cross_origin
-from shapely.geometry import Point, shape, asPolygon, mapping
+from shapely.geometry import Point, shape, asPolygon, mapping, polygon
 from shapely.ops import cascaded_union
 
 
@@ -42,7 +42,7 @@ def parse_flow(args):
 
 def parse_mode(args):
     if not args.get("mode") or args.get("mode") == "all":
-        return "all"
+        return "total"
     elif args.get("mode") == "scooter":
         return "scooter"
     elif args.get("mode") == "bicycle":
@@ -80,8 +80,12 @@ def get_intersect_features(query_geom, grid, idx):
     ids = []
     polys = []
 
-    for coord in query_geom.coords:
-        print(coord)
+    if isinstance(query_geom, polygon.PolygonAdapter):
+        coords = query_geom.exterior.coords
+    else:
+        coords = query_geom.coords
+        
+    for coord in coords:
 
         # reduce intersection feature set with rtree (this tests polygon bbox intersection)
         for intersect_pos in idx.intersection(coord):
@@ -96,37 +100,45 @@ def get_intersect_features(query_geom, grid, idx):
     return ids, polys
 
 
-def get_trip_features(source_ids, grid, flow):
-    # used to collect trip count values from grid cells that match a source cell
+def get_trip_features(intersect_ids, grid, flow, mode):
+    '''
+    Given a list of cell ids, extract trip count properties from the source grid data.
+    '''    
+
+    # aggregate trip count values from grid cells that match a source cell
     trip_features_lookup = {}
+
     total_trips = 0
 
     if flow == "origin":
-        key = "start_grid_ids"
+        flow_key = "orig_cell_ids"
     elif flow == "destination":
-        key = "end_grid_ids"
+        flow_key = "dest_cell_ids"
 
-    # extract related features from each connected one
-    for source_id in source_ids:
+    for intersect_cell_id in intersect_ids:
 
-        if key in grid["FeatureIndex"][source_id]["properties"]:
+        if flow_key in grid["FeatureIndex"][intersect_cell_id]["properties"]:
+            
+            for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
 
-            for trip_grid_id in grid["FeatureIndex"][source_id]["properties"][key].keys():
-                count = grid["FeatureIndex"][source_id]["properties"][key][trip_grid_id]["count"]
+                count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
 
-                if trip_grid_id not in trip_features_lookup:
-                    # drop all feature properties except current count
-                    trip_features_lookup[trip_grid_id] = dict(grid["FeatureIndex"][trip_grid_id])
-                    trip_features_lookup[trip_grid_id]["properties"] = { "current_count" : 0 }
+                if trip_cell_id not in trip_features_lookup:
+                    '''
+                    Add a new entry in the trip features lookup, dropping all feature
+                    properties except current count
+                    '''
+                    trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
+                    trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
 
-                trip_features_lookup[trip_grid_id]["properties"]["current_count"] += count                
+                trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count                
 
                 total_trips += count
     
     # assemble matched features into geojson structure
     trip_features = {"type": "FeatureCollection" } 
 
-    trip_features["features"] = [trip_features_lookup[key] for key in trip_features_lookup.keys()]
+    trip_features["features"] = [trip_features_lookup[cell_id] for cell_id in trip_features_lookup.keys()]
 
     return {"features": trip_features, "total_trips": total_trips}
 
@@ -154,14 +166,14 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
 
-    trip_features = get_trip_features(intersect_ids, data, flow)
+    trip_features = get_trip_features(intersect_ids, data, flow, mode)
 
     intersect_poly = cascaded_union(intersect_polys)
 
     trip_features["intersect_feature"] = mapping(intersect_poly)
 
     return response.json(trip_features)
-    
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True, workers=8)
