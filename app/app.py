@@ -3,9 +3,6 @@ Dockless origin/destination trip data API
 
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
-
-TODO: check origin/destinon logic
-TODO: tests
 """
 import argparse
 import json
@@ -22,8 +19,7 @@ from shapely.ops import cascaded_union
 
 def spatial_index(features):
     # create spatial index of grid cell features
-    # featues: geojson feature array
-    # todo: use shapely STRtree !
+    # features: geojson feature array
     idx = index.Index()
     for pos, feature in enumerate(features):
         idx.insert(pos, shape(feature["geometry"]).bounds)
