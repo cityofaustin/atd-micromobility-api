@@ -1,0 +1,20 @@
+version: '3'
+services:
+  dockerless-api-db:
+    image: postgres:9.6
+    ports:
+     - "5432:5432"
+    environment:
+      POSTGRES_DB: 'dockerless'
+      POSTGRES_USER: 'dockerless'
+  dockerless-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    ports:
+     - "5000:5000"
+    environment:
+      DEPLOYMENT_MODE: "LOCAL"
+      DATABASE_URL: "postgres://dockerless@dockerless-api-db:5432/dockerless"
+    depends_on:
+     - "dockerless-api-db"

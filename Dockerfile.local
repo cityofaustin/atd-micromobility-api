@@ -1,9 +1,12 @@
-
-
 FROM cityofaustin/dockerless-api
 
-ENV DEPLOYMENT_MODE "PRODUCTION"
+ENV DEPLOYMENT_MODE "LOCAL"
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+ENV PYTHONUNBUFFERED=1
+ENV WEB_CONCURRENCY=4
+ENV PORT ${PORT:-80}
+EXPOSE $PORT
 
 CMD [ "gunicorn", "app:app", "-b 0.0.0.0:5000", "--worker-class", "sanic.worker.GunicornWorker",  "--pythonpath", "/app/" ]
