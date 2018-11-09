@@ -144,7 +144,7 @@ source = os.path.join(dirname, "data/grid.json")
 
 with open(source, "r") as fin:
     data = json.loads(fin.read())
-    #idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
+    idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
     app = Sanic(__name__)
     CORS(app)
 

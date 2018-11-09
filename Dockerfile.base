@@ -1,6 +1,6 @@
 FROM python:3.6
 
-RUN apt-get update && apt-get install dialog apt-utils python3-rtree -y
+RUN apt-get update && apt-get install dialog apt-utils python3-rtree curl -y
 
 #  Set the working directory
 WORKDIR /app
