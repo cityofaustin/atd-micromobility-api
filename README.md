@@ -3,11 +3,11 @@ A dockless mobility data API built with Python/Sanic
 
 ## Installation
 
-### "Database"
+### About the "Database"
 
 The source database for the API is a modified geojson file. TODO: add sample data and link to processing tools to generate source data.
 
-### Deploy w/ Python 3
+### Option 1: Run w/ Python 3
 
 1. Clone repo and `cd` into it.
 
@@ -23,12 +23,13 @@ pip install -r requirements.txt
 ```python
 python app/app.py
 ```
+
 6. Make a request:
 ```shell
 curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 ```
 
-### Dockerized Deployment
+### Option 2: Run w/ Docker
 
 1. Install [docker](https://www.docker.com/) and start the engine:
 `systemctl start docker`
