@@ -41,16 +41,7 @@ curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flo
 
 4. Start the docker server (in the background on port 80)
 
-```shell
-sudo docker run \
-     -d \
-     -it \
-     --rm \
-     -p 80:8000 \
-     -v `pwd`:/app \
-     atddocker/dockless-api \
-     python app/app.py
-```
+`./scripts/serve-local.sh`
 
 5. Make a request:
 ```shell
