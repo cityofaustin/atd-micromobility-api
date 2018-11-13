@@ -10,10 +10,10 @@ docker build --tag "$TAG" .
 echo "running docker image..."
 
 docker run \
-   -d \
-   -it \
-   --rm \
-   -p 80:8000 \
-   -v `pwd`:/app \
-   atddocker/dockless-api \
-   python app/app.py
+  --rm \
+  -it \
+  --name dockless-api \
+  -p 80:8000 \
+  -v `pwd`:/app \
+  atddocker/dockless-api \
+  python app/app.py
