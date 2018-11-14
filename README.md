@@ -1,6 +1,12 @@
 # dockless-api
 
-A dockless mobility data API built with Python/Sanic
+The Dockless API provides an interface for retrieving anonymized and aggregated [dockless mobility](https://austintexas.gov/docklessmobility) trip data in the City of Austin. This API supplies data to our interactive [Dockless Mobility Explorer](https://dockless.austintexas.io).
+
+Table of Contents
+=================
+
+    * [Installation](#Installation)
+    * [API Reference](#api-reference)
 
 ## Installation
 
@@ -53,3 +59,53 @@ python app/app.py
 ```shell
 curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 ```
+
+## API Reference
+
+### Base URL + Versioning
+
+Dockless API calls described below can be made via the following semantically versioned endpoint:
+
+`https://dockless-api.austintexas.io/v1[/request]`
+
+### Trips
+----
+
+* **URL**
+
+  /trips
+
+* **Method:**
+
+  `GET`
+  
+*  **URL Params**
+
+    **Required:**
+
+    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The enpoint expects either one coordinate (a point: `[lng1],[lng2]`) or three or more coordinates (a polygon: [lng1],[lat1],[lng2],[lat2],[lat3],[lat4]....). **Line references are not currently supported**
+
+    **Optional:**
+
+    `mode=all` filter identifying the mode transport. One of either `bicycle`, `scooter`, or `all` (default).
+
+    `flow=origin` indicate if the returned data reflects trips which originated in the requested geometry (`origin`) or terminated in the requested geometry (`destination`).
+
+* **Success Response:**
+
+    * **Code:** 200
+
+    * **Content:** `{...}`
+
+    - `features`:
+        A GeoJSON `FeatureCollection`, in which each feature is a hexagon grid cell with a single `trips` property whose value is the aggregated number of dockless trips which originated or terminated in the cell, given the requested `mode` and `flow`.
+
+        #TODO: define feature properties
+
+    - `total_trips`:
+        The total number of trips associated with the returned features.
+        
+    - `intersect_feature`
+        A GeoJSON `FeatureCollection` representing the hexagon grid cells which intersected with the requested input geometry.
+
+
