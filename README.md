@@ -2,11 +2,9 @@
 
 The Dockless API provides an interface for retrieving anonymized and aggregated [dockless mobility](https://austintexas.gov/docklessmobility) trip data in the City of Austin. This API supplies data to our interactive [Dockless Mobility Explorer](https://dockless.austintexas.io).
 
-Table of Contents
-=================
-
-    * [Installation](#Installation)
-    * [API Reference](#api-reference)
+## Table of Contents
+* [Installation](#Installation)
+* [API Reference](#api-reference)
 
 ## Installation
 
@@ -83,11 +81,12 @@ Dockless API calls described below can be made via the following semantically ve
 
     **Required:**
 
-    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The enpoint expects either one coordinate (a point: `[lng1],[lng2]`) or three or more coordinates (a polygon: [lng1],[lat1],[lng2],[lat2],[lat3],[lat4]....). **Line references are not currently supported**
+    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The enpoint expects either one coordinate (a *point*: `[lng1],[lng2]`) or three or more coordinates (a *polygon*: `[lng1],[lat1],[lng2],[lat2],[lng3],[lat3]...`).
+    *Note: Line references are not currently supported*
 
     **Optional:**
 
-    `mode=all` filter identifying the mode transport. One of either `bicycle`, `scooter`, or `all` (default).
+    `mode=all` filter identifying the mode transport. Either `bicycle`, `scooter`, or `all` (default).
 
     `flow=origin` indicate if the returned data reflects trips which originated in the requested geometry (`origin`) or terminated in the requested geometry (`destination`).
 
@@ -100,7 +99,7 @@ Dockless API calls described below can be made via the following semantically ve
     - `features`:
         A GeoJSON `FeatureCollection`, in which each feature is a hexagon grid cell with a single `trips` property whose value is the aggregated number of dockless trips which originated or terminated in the cell, given the requested `mode` and `flow`.
 
-        #TODO: define feature properties
+        TODO: define feature properties
 
     - `total_trips`:
         The total number of trips associated with the returned features.
