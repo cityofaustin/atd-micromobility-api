@@ -109,5 +109,6 @@ Given an input geometry, the trips endpoint returns GeoJSON `FeatureCollection` 
   - `total_trips`:
         The total number of trips associated with the returned features.
         
+## License
 
-
+This work belong to the City of Austin, and so it belongs to the people. The contents of this repository are in the public domain within the United States. Additionally, we waive copyright and related rights in the work worldwide through the [CC0 1.0 Universal public domain dedication](https://creativecommons.org/publicdomain/zero/1.0/).
