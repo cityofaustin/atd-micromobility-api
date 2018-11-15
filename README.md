@@ -69,6 +69,8 @@ Dockless API calls described below can be made via the following semantically ve
 ### Trips
 ----
 
+Given an input geometry, the trips endpoint returns GeoJSON `FeatureCollection` which contains aggregated dockless trip counts. 
+
 * **URL**
 
   /trips
@@ -81,7 +83,7 @@ Dockless API calls described below can be made via the following semantically ve
 
     **Required:**
 
-    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The enpoint expects either one coordinate (a *point*: `[lng1],[lng2]`) or three or more coordinates (a *polygon*: `[lng1],[lat1],[lng2],[lat2],[lng3],[lat3]...`).
+    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The endpoint expects either one coordinate (a *point*: `[lng1],[lng2]`) or three or more coordinates (a *polygon*: `[lng1],[lat1],[lng2],[lat2],[lng3],[lat3]...`).
     *Note: Line references are not currently supported*
 
     **Optional:**
@@ -97,14 +99,15 @@ Dockless API calls described below can be made via the following semantically ve
     * **Content:** `{...}`
 
     - `features`:
-        A GeoJSON `FeatureCollection`, in which each feature is a hexagon grid cell with a single `trips` property whose value is the aggregated number of dockless trips which originated or terminated in the cell, given the requested `mode` and `flow`.
+        A GeoJSON (`type: FeatureCollection`), in which each feature is a hexagon grid cell with a single `trips` property whose value is the aggregated number of dockless trips which originated or terminated in the cell, given the requested `mode` and `flow`.
 
         TODO: define feature properties
 
-    - `total_trips`:
+    - `intersect_feature`
+        A GeoJSON (`type: Polygon`) representing the union of the hexagon grid cells which intersect with the requested input geometry.
+
+  - `total_trips`:
         The total number of trips associated with the returned features.
         
-    - `intersect_feature`
-        A GeoJSON `FeatureCollection` representing the hexagon grid cells which intersected with the requested input geometry.
 
 
