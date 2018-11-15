@@ -149,7 +149,7 @@ with open(source, "r") as fin:
     CORS(app)
 
 
-@app.get("/v1/trips")
+@app.get("/trips", version=1)
 async def trip_handler(request):
 
     flow = parse_flow(request.args)
