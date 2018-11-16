@@ -1,12 +1,12 @@
 """
 Dockless origin/destination trip data API
-
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 """
 import argparse
 import json
 import os
+import urllib.request
 
 from rtree import index
 from sanic import Sanic
@@ -149,7 +149,7 @@ with open(source, "r") as fin:
     CORS(app)
 
 
-@app.get("/v1/trips")
+@app.get("/trips", version=1)
 async def trip_handler(request):
 
     flow = parse_flow(request.args)
@@ -170,6 +170,15 @@ async def trip_handler(request):
 
     return response.json(trip_features)
 
-@app.route('/test')
+@app.route('/reload', version=1)
 async def index(request):
-    return response.text("Hello World from Child App")
+    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/grid.json")
+    return response.text("Reloaded")
+
+@app.route('/', version=1)
+async def index(request):
+    return response.text("Hello World")
+
+@app.exception(exceptions.NotFound)
+async def ignore_404s(request, exception):
+    return response.text("Page not found: {}".format(request.url))

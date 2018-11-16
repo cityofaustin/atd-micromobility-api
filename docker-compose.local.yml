@@ -8,3 +8,4 @@ services:
      - "5000:5000"
     environment:
       DEPLOYMENT_MODE: "LOCAL"
+      DATABASE_URL: "https://s3.amazonaws.com/dockless/data/grid.json"

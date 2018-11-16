@@ -18,3 +18,12 @@ python app/app.py
 ```shell
 curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 ```
+
+
+## Running Docker
+
+```
+docker build -f Dockerfile.base -t cityofaustin/dockless-api .
+docker tag cityofaustin/dockless-api:latest cityofaustin/dockless-api:latest
+docker push cityofaustin/dockless-api
+```

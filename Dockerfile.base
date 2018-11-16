@@ -1,3 +1,7 @@
+#
+# Dockless Base 
+#
+
 FROM python:3.6
 
 RUN apt-get update && apt-get install dialog apt-utils python3-rtree curl -y
@@ -8,7 +12,6 @@ WORKDIR /app
 #  Copy package requirements
 COPY "$PWD/app" /app
 COPY requirements.txt /app
-COPY "$PWD/app/data" /app/data
 COPY "$PWD/docker-entrypoint.sh" /app/docker-entrypoint.sh
 
 #  Update python3-pip
