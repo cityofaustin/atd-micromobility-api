@@ -31,8 +31,8 @@ env:
 
 # We are going to install AWS Cli, Heroku Cli and source our helper scripts
 before_install:
-    - source ./.travis/aws-helper.sh
     - sudo pip install awscli
+    - source ./.travis/aws-helper.sh
 
 # Jobs
 jobs:
