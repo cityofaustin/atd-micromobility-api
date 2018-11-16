@@ -2,7 +2,7 @@
 set -o errexit
 
 echo "Logging in to AWS Docker Repository"
-$(aws ecr get-login --no-include-email --region us-east-1)
+$(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
 
 function build_dockless {
 	DOCKLESS_IMAGE=$1

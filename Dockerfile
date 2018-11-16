@@ -1,13 +1,17 @@
 #
-# Development Dockless Container
+# Dockless-API Container
 #
 
 FROM cityofaustin/dockless-api:base
 
-ENV DEPLOYMENT_MODE "PRODUCTION"
+ARG DEPLOYMENT_MODE
+ENV DEPLOYMENT_MODE ${DEPLOYMENT_MODE:-"PRODUCTION"}
 
-ENV PYTHONUNBUFFERED=1
-ENV WEB_CONCURRENCY=4
+ARG PYTHONUNBUFFERED
+ENV PYTHONUNBUFFERED ${PYTHONUNBUFFERED:-1}
+
+ARG WEB_CONCURRENCY
+ENV WEB_CONCURRENCY ${WEB_CONCURRENCY:-4}
 
 ARG HOST
 ENV HOST ${HOST:-"0.0.0.0"}
@@ -16,7 +20,10 @@ ARG PORT
 ENV PORT ${PORT:-80}
 EXPOSE $PORT
 
+# We copy the source code one more time, since we are relaunching.
+COPY "$PWD/app" /app
 COPY "$PWD/docker-entrypoint.sh" /app/docker-entrypoint.sh
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 CMD [ "gunicorn", "app:app", "--worker-class", "sanic.worker.GunicornWorker",  "--pythonpath", "/app/" ]

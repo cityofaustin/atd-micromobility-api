@@ -60,7 +60,9 @@ jobs:
     after_success:
     - restart_all_tasks
 
-  # We run a worker based on our environment
-  #- stage: Run Worker
+  # Template to create additional Stages
+  #- stage: The Name of the Stage
   #  script:
-  #  - janis_run_worker $TRAVIS_BRANCH
+  #  - command_goes_here $TRAVIS_BRANCH
+  # after_success:
+  # - restart_all_tasks
