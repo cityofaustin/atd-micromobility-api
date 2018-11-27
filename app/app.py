@@ -2,7 +2,7 @@
 Dockless origin/destination trip data API
 
 # try me
-http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
+http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
 import argparse
 import json
