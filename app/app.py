@@ -125,7 +125,10 @@ def get_trip_features(intersect_ids, grid, flow, mode):
                         properties except current count
                         '''
                         trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = { "trips" : 0 }
+                        trip_features_lookup[trip_cell_id]["properties"] = {
+                            "trips" : 0,
+                            "cell_id": int(trip_cell_id)
+                        }
 
                     trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
 
