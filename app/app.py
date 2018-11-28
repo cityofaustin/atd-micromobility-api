@@ -125,9 +125,9 @@ def get_trip_features(intersect_ids, grid, flow, mode):
                         properties except current count
                         '''
                         trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
+                        trip_features_lookup[trip_cell_id]["properties"] = { "trips" : 0 }
 
-                    trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count                
+                    trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
 
                     total_trips += count
     
@@ -151,7 +151,7 @@ with open(source, "r") as fin:
 
 @app.get("/trips", version=1)
 async def trip_handler(request):
-
+    print(request)
     flow = parse_flow(request.args)
 
     mode = parse_mode(request.args)
