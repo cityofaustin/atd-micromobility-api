@@ -1,7 +1,7 @@
 """
 Dockless origin/destination trip data API
 # try me
-http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
+http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
 import argparse
 import json
@@ -125,10 +125,12 @@ def get_trip_features(intersect_ids, grid, flow, mode):
                         properties except current count
                         '''
                         trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
+                        trip_features_lookup[trip_cell_id]["properties"] = {
+                            "trips" : 0,
+                            "cell_id": int(trip_cell_id)
+                        }
 
-                    trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count
-
+                    trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
                     total_trips += count
 
     # assemble matched features into geojson structure
@@ -151,7 +153,7 @@ with open(source, "r") as fin:
 
 @app.get("/trips", version=1)
 async def trip_handler(request):
-
+    print(request)
     flow = parse_flow(request.args)
 
     mode = parse_mode(request.args)
