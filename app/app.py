@@ -1,12 +1,12 @@
 """
 Dockless origin/destination trip data API
-
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
 import argparse
 import json
 import os
+import urllib.request
 
 from rtree import index
 from sanic import Sanic
@@ -52,12 +52,12 @@ def parse_coordinates(args):
         raise exceptions.ServerError("XY parameter is requried.", status_code=500)
 
     elements = args.get("xy").split(",")
-    
+
     try:
         elements = [float(elem) for elem in elements]
     except ValueError:
         raise exceptions.ServerError("Unable to handle xy. Verify that xy is a comma-separated string of numbers.", status_code=500)
-    
+
     return [tuple(elements[x : x + 2]) for x in range(0, len(elements), 2)]
 
 
@@ -68,7 +68,7 @@ def get_query_geom(coords):
         return asPolygon(coords)
     else:
         raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
-        
+
 
 def get_intersect_features(query_geom, grid, idx):
     # get the grid cells that intersect with the request geometry
@@ -86,7 +86,7 @@ def get_intersect_features(query_geom, grid, idx):
 
         grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
         poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
-        
+
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
             ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
@@ -98,7 +98,7 @@ def get_intersect_features(query_geom, grid, idx):
 def get_trip_features(intersect_ids, grid, flow, mode):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
-    '''    
+    '''
 
     # aggregate trip count values from grid cells that match a source cell
     trip_features_lookup = {}
@@ -113,7 +113,7 @@ def get_trip_features(intersect_ids, grid, flow, mode):
     for intersect_cell_id in intersect_ids:
 
         if flow_key in grid["FeatureIndex"][intersect_cell_id]["properties"]:
-            
+
             for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
 
                 count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
@@ -131,11 +131,10 @@ def get_trip_features(intersect_ids, grid, flow, mode):
                         }
 
                     trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
-
                     total_trips += count
-    
+
     # assemble matched features into geojson structure
-    trip_features = {"type": "FeatureCollection" } 
+    trip_features = {"type": "FeatureCollection" }
 
     trip_features["features"] = [trip_features_lookup[cell_id] for cell_id in trip_features_lookup.keys()]
 
@@ -146,7 +145,7 @@ dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/grid.json")
 
 with open(source, "r") as fin:
-    data = json.loads(fin.read())   
+    data = json.loads(fin.read())
     idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
     app = Sanic(__name__)
     CORS(app)
@@ -160,7 +159,7 @@ async def trip_handler(request):
     mode = parse_mode(request.args)
 
     coords = parse_coordinates(request.args)
-    
+
     query_geom = get_query_geom(coords)
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
@@ -173,7 +172,15 @@ async def trip_handler(request):
 
     return response.json(trip_features)
 
+@app.route('/reload', version=1)
+async def index(request):
+    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/grid.json")
+    return response.text("Reloaded")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True, workers=8)
+@app.route('/', version=1)
+async def index(request):
+    return response.text("Hello World")
 
+@app.exception(exceptions.NotFound)
+async def ignore_404s(request, exception):
+    return response.text("Page not found: {}".format(request.url))
