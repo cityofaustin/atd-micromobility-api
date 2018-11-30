@@ -21,7 +21,9 @@ function build_dockless {
 
 	# Build
   echo "Building ${DOCKLESS_FILE} with tag ${DOCKLESS_TAG}"
-	docker build -f $DOCKLESS_FILE -t $DOCKLESS_TAG .
+	docker build -f $DOCKLESS_FILE -t $DOCKLESS_TAG \
+				--build-arg DATABASE_URL=$DOCKLESS_DATABASE_URL \
+				.
 
 	# Tag
   echo "Tagging ${DOCKLESS_TAG} with tag ${DOCKLESS_TAG}"

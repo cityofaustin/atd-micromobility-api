@@ -12,5 +12,3 @@ services:
         HOST: "0.0.0.0"
     ports:
      - "5000:5000"
-    environment:
-      DATABASE_URL: "https://s3.amazonaws.com/dockless/data/grid.json"
