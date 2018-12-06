@@ -117,6 +117,7 @@ def get_trip_features(intersect_ids, grid, flow, mode):
             for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
 
                 count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
+                count_as_height =  count / 5    # each 5 trips will equate to 1 meter of height on the map
 
                 if count:
                     if trip_cell_id not in trip_features_lookup:
@@ -127,7 +128,8 @@ def get_trip_features(intersect_ids, grid, flow, mode):
                         trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
                         trip_features_lookup[trip_cell_id]["properties"] = {
                             "trips" : 0,
-                            "cell_id": int(trip_cell_id)
+                            "cell_id": int(trip_cell_id),
+                            "count_as_height": count_as_height
                         }
 
                     trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
