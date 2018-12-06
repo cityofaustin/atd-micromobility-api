@@ -1,6 +1,5 @@
 notes.md
 dist
-app/data/*.json
 __pycache__
 .env
 .DS_Store
