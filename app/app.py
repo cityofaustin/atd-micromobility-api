@@ -2,12 +2,19 @@
 Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
+
+#TODO:
+- build geosjon
+- fetch records by grid cell (council district is placeholder)
+- query params for dow, hour day, date
+- drop start/end minute/second?
 """
 import argparse
 import json
 import os
 import urllib.request
 
+import requests
 from rtree import index
 from sanic import Sanic
 from sanic import response
@@ -70,7 +77,7 @@ def get_query_geom(coords):
         raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
 
 
-def get_intersect_features(query_geom, grid, idx):
+def get_intersect_features(query_geom, grid, idx, id_property="id"):
     # get the grid cells that intersect with the request geometry
     # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
@@ -89,13 +96,19 @@ def get_intersect_features(query_geom, grid, idx):
 
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
-            ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
+            # simulate id lookup
+            from random import randint
+            val = str(randint(1, 10))
+            ids.append(val)
+
+            # actual id lookup
+            # ids.append(grid["FeatureIndex"][grid_id]["properties"][id_property])
             polys.append(poly)
 
     return ids, polys
 
 
-def get_trip_features(intersect_ids, grid, flow, mode):
+def get_trip_data(intersect_ids, flow, mode):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
@@ -105,42 +118,29 @@ def get_trip_features(intersect_ids, grid, flow, mode):
 
     total_trips = 0
 
+    # flow == `destination` or not recognized 
+    flow_key_init = "council_district_end"
+    flow_key_end = "council_district_start"
+
     if flow == "origin":
-        flow_key = "orig_cell_ids"
-    elif flow == "destination":
-        flow_key = "dest_cell_ids"
+        flow_key_init = "council_district_start"
+        flow_key_end = "council_district_end"
 
-    for intersect_cell_id in intersect_ids:
+    url =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
 
-        if flow_key in grid["FeatureIndex"][intersect_cell_id]["properties"]:
+    # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
+    intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
 
-            for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
+    query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) group by {flow_key_end}"
 
-                count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
-                count_as_height =  count / 5    # each 5 trips will equate to 1 meter of height on the map
+    print(query)
+    params = { "$query" : query }
 
-                if count:
-                    if trip_cell_id not in trip_features_lookup:
-                        '''
-                        Add a new entry in the trip features lookup, dropping all feature
-                        properties except current count
-                        '''
-                        trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = {
-                            "trips" : 0,
-                            "cell_id": int(trip_cell_id),
-                            "count_as_height": count_as_height
-                        }
+    res = requests.get(url, params)
 
-                    trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
-                    total_trips += count
+    res.raise_for_status()
 
-    # assemble matched features into geojson structure
-    trip_features = {"type": "FeatureCollection" }
-
-    trip_features["features"] = [trip_features_lookup[cell_id] for cell_id in trip_features_lookup.keys()]
-
-    return {"features": trip_features, "total_trips": total_trips}
+    return res.json()
 
 
 dirname = os.path.dirname(__file__)
@@ -166,17 +166,18 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
 
-    trip_features = get_trip_features(intersect_ids, data, flow, mode)
+    trip_data = {}
+    trip_data['features'] = get_trip_data(intersect_ids, flow, mode)
 
     intersect_poly = cascaded_union(intersect_polys)
 
-    trip_features["intersect_feature"] = mapping(intersect_poly)
+    trip_data["intersect_feature"] = mapping(intersect_poly)
 
-    return response.json(trip_features)
+    return response.json(trip_data)
 
 @app.route('/reload', version=1)
 async def index(request):
-    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/grid.json")
+    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/council_districts_simplified.json")
     return response.text("Reloaded")
 
 @app.route('/', version=1)
@@ -186,3 +187,6 @@ async def index(request):
 @app.exception(exceptions.NotFound)
 async def ignore_404s(request, exception):
     return response.text("Page not found: {}".format(request.url))
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
