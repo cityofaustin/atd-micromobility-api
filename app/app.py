@@ -100,17 +100,10 @@ def get_intersect_features(query_geom, grid, idx, id_property="id"):
 
     return ids, polys
 
-
-def get_trips(intersect_ids, flow, mode):
+def get_flow_keys(flow):
     '''
-    Given a list of cell ids, extract trip count properties from the source grid data.
+    Bit of harcoding to map the flow to the corresponding dataset property
     '''
-
-    # aggregate trip count values from grid cells that match a source cell
-    trip_features_lookup = {}
-
-    total_trips = 0
-
     if flow == "origin":
         flow_key_init = "orig_cell_id"
         flow_key_end = "dest_cell_id"
@@ -121,6 +114,23 @@ def get_trips(intersect_ids, flow, mode):
         # this should never happen because we validate the flow param when parsing
         # the request
         raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
+
+    return [flow_key_init, flow_key_end]
+
+
+def get_trips(intersect_ids, flow_keys, mode):
+    '''
+    Given a list of cell ids, extract trip count properties from the source grid data.
+    '''
+
+    # aggregate trip count values from grid cells that match a source cell
+    trip_features_lookup = {}
+
+    total_trips = 0
+
+    # this flow O/D stuff can get confusing, so let's name these array elements
+    flow_key_init = flow_keys[0]
+    flow_key_end = flow_keys[1]
 
     # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
     intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
@@ -138,7 +148,6 @@ def get_trips(intersect_ids, flow, mode):
 
     query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) group by {flow_key_end}"
 
-    print(query)
     params = { "$query" : query }
 
     res = requests.get(TRIPS_URL, params)
@@ -148,13 +157,21 @@ def get_trips(intersect_ids, flow, mode):
     return res.json()
 
 
-def build_geojson(grid, trips):
+def build_geojson(grid, trips, flow_key_start):
+    '''
+    Combine trip counts with their corresponding geojson feature, returning a geojson
+    object with counts assigned to `trips` property
+    '''
     geojson = {"type":"FeatureCollection","features":[]}
 
     for cell in trips:
-        cell_id = trip.get("council_district_start")
+        cell_id = cell.get(flow_key_start)
         feature = grid.get(cell_id)
-        feature["properties"]["trips"] = int(trip.get("trip_count"))
+        
+        if not feature:
+            continue
+        
+        feature["properties"]["trips"] = int(cell.get("trip_count"))
         geojson["features"].append(feature)
 
     return geojson
@@ -164,7 +181,9 @@ dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/hex500_indexed.json")
 
 with open(source, "r") as fin:
-    TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    # TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    TRIPS_URL =  "https://data.austintexas.gov/resource/hf5k-6epr.json"
+    
     grid = json.loads(fin.read())
     idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
     app = Sanic(__name__)
@@ -173,8 +192,9 @@ with open(source, "r") as fin:
 
 @app.get("/trips", version=1)
 async def trip_handler(request):
-    print(request)
     flow = parse_flow(request.args)
+
+    flow_keys = get_flow_keys(flow)
 
     mode = parse_mode(request.args)
 
@@ -186,9 +206,10 @@ async def trip_handler(request):
 
     response_data = {}
 
-    trips = get_trips(intersect_ids, flow, mode)
+    # intersect_ids = ['014550']
+    trips = get_trips(intersect_ids, flow_keys, mode)
 
-    response_data['features'] = build_geojson(grid, trips)
+    response_data['features'] = build_geojson(grid, trips, flow_keys[1])
 
     intersect_poly = cascaded_union(intersect_polys)
 
