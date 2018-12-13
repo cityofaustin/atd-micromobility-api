@@ -4,8 +4,6 @@ Dockless origin/destination trip data API
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 
 #TODO:
-- build geosjon
-- fetch records by grid cell (council district is placeholder)
 - query params for dow, hour day, date
 """
 import argparse
@@ -123,12 +121,7 @@ def get_trips(intersect_ids, flow_keys, mode):
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
 
-    # aggregate trip count values from grid cells that match a source cell
-    trip_features_lookup = {}
-
-    total_trips = 0
-
-    # this flow O/D stuff can get confusing, so let's name these array elements
+    # this flow O/D stuff can get confusing, so let's name these list elements
     flow_key_init = flow_keys[0]
     flow_key_end = flow_keys[1]
 
@@ -146,7 +139,7 @@ def get_trips(intersect_ids, flow_keys, mode):
         'hour' : '',
     }
 
-    query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) group by {flow_key_end}"
+    query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) and {flow_key_init} not in ('OUT_OF_BOUNDS') and {flow_key_end} not in ('OUT_OF_BOUNDS') group by {flow_key_end} limit 10000000"
 
     params = { "$query" : query }
 
@@ -167,22 +160,30 @@ def build_geojson(grid, trips, flow_key_start):
     for cell in trips:
         cell_id = cell.get(flow_key_start)
         feature = grid.get(cell_id)
-        
-        if not feature:
-            continue
-        
-        feature["properties"]["trips"] = int(cell.get("trip_count"))
+
+        count = int(cell.get("trip_count"))
+
+        count_as_height =  count / 5  # each 5 trips will equate to 1 meter of height on the map
+
+        feature["properties"]["trips"] = count
+        feature["properties"]["count_as_height"] = count_as_height
+        feature["properties"]["cell_id"] = int(cell_id)
+        feature["properties"]["trips"] = count
         geojson["features"].append(feature)
 
     return geojson
 
+
+def get_total_trips(trips):
+    return sum([int(trip["trip_count"]) for trip in trips])
+    
 
 dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/hex500_indexed.json")
 
 with open(source, "r") as fin:
     # TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
-    TRIPS_URL =  "https://data.austintexas.gov/resource/hf5k-6epr.json"
+    TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
     
     grid = json.loads(fin.read())
     idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
@@ -204,12 +205,14 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    response_data = {}
-
     # intersect_ids = ['014550']
     trips = get_trips(intersect_ids, flow_keys, mode)
 
+    response_data = {}
+
     response_data['features'] = build_geojson(grid, trips, flow_keys[1])
+
+    response_data ['total_trips'] = get_total_trips(trips)
 
     intersect_poly = cascaded_union(intersect_polys)
 
@@ -230,5 +233,9 @@ async def index(request):
 async def ignore_404s(request, exception):
     return response.text("Page not found: {}".format(request.url))
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+#
+# TODO: does this break the app deployment? Handy for local deve but seem to remember
+# TODO: a good reason for removing it
+#
+# if __name__ == "__main__":
+    # app.run(host="0.0.0.0", port=8000, debug=True)
