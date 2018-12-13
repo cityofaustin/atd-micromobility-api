@@ -1,6 +1,4 @@
 # appends parent directory to path
-# used to just append '..' to path, but that breaks when
-# script is imoporte by an external package
 import sys
 import os
 
