@@ -7,7 +7,6 @@ http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=des
 - build geosjon
 - fetch records by grid cell (council district is placeholder)
 - query params for dow, hour day, date
-- drop start/end minute/second?
 """
 import argparse
 import json
@@ -91,24 +90,18 @@ def get_intersect_features(query_geom, grid, idx, id_property="id"):
     # reduce intersection feature set with rtree (this tests polygon bbox intersection)
     for intersect_pos in idx.intersection(query_geom.bounds):
 
-        grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
-        poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
+        grid_id = list(grid.keys())[intersect_pos]
+        poly = shape(grid[grid_id]["geometry"])
 
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
-            # simulate id lookup
-            from random import randint
-            val = str(randint(1, 10))
-            ids.append(val)
-
-            # actual id lookup
-            # ids.append(grid["FeatureIndex"][grid_id]["properties"][id_property])
+            ids.append(grid[grid_id]["properties"][id_property])
             polys.append(poly)
 
     return ids, polys
 
 
-def get_trip_data(intersect_ids, flow, mode):
+def get_trips(intersect_ids, flow, mode):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
@@ -118,37 +111,62 @@ def get_trip_data(intersect_ids, flow, mode):
 
     total_trips = 0
 
-    # flow == `destination` or not recognized 
-    flow_key_init = "council_district_end"
-    flow_key_end = "council_district_start"
-
     if flow == "origin":
-        flow_key_init = "council_district_start"
-        flow_key_end = "council_district_end"
-
-    url =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+        flow_key_init = "orig_cell_id"
+        flow_key_end = "dest_cell_id"
+    elif flow == "destination":
+        flow_key_init = "dest_cell_id"
+        flow_key_end = "orig_cell_id"
+    else:
+        # this should never happen because we validate the flow param when parsing
+        # the request
+        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
 
     # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
     intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
+
+    # todo: this
+    query_params = {
+        'start_time' : '',
+        'end_time' : '',
+        'council_district_start' : '',
+        'council_district_end' : '',
+        'dow' : '',
+        'month' : '',
+        'hour' : '',
+    }
 
     query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) group by {flow_key_end}"
 
     print(query)
     params = { "$query" : query }
 
-    res = requests.get(url, params)
+    res = requests.get(TRIPS_URL, params)
 
     res.raise_for_status()
 
     return res.json()
 
 
+def build_geojson(grid, trips):
+    geojson = {"type":"FeatureCollection","features":[]}
+
+    for cell in trips:
+        cell_id = trip.get("council_district_start")
+        feature = grid.get(cell_id)
+        feature["properties"]["trips"] = int(trip.get("trip_count"))
+        geojson["features"].append(feature)
+
+    return geojson
+
+
 dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/grid.json")
+source = os.path.join(dirname, "data/hex500_indexed.json")
 
 with open(source, "r") as fin:
-    data = json.loads(fin.read())
-    idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
+    TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    grid = json.loads(fin.read())
+    idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
     app = Sanic(__name__)
     CORS(app)
 
@@ -164,20 +182,23 @@ async def trip_handler(request):
 
     query_geom = get_query_geom(coords)
 
-    intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trip_data = {}
-    trip_data['features'] = get_trip_data(intersect_ids, flow, mode)
+    response_data = {}
+
+    trips = get_trips(intersect_ids, flow, mode)
+
+    response_data['features'] = build_geojson(grid, trips)
 
     intersect_poly = cascaded_union(intersect_polys)
 
-    trip_data["intersect_feature"] = mapping(intersect_poly)
+    response_data["intersect_feature"] = mapping(intersect_poly)
 
-    return response.json(trip_data)
+    return response.json(response_data)
 
 @app.route('/reload', version=1)
 async def index(request):
-    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/council_districts_simplified.json")
+    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json")
     return response.text("Reloaded")
 
 @app.route('/', version=1)
