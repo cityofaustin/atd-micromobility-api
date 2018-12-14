@@ -10,13 +10,6 @@ echo "--    PORT:              ${PORT}"
 
 echo ""
 
-if [ "${DEPLOYMENT_MODE}" = "PRODUCTION" ]; then
-  echo "Downloading latest database"
-  curl -o $DATABASE_PATH $DATABASE_URL
-else
-  echo "Using the existing database: ${DATABASE_PATH}"
-fi
-
-echo "Done Downloading latest database"
+echo "Using the existing database: ${DATABASE_PATH}"
 
 exec "$@"
