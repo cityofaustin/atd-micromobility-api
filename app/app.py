@@ -2,12 +2,16 @@
 Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
+
+#TODO:
+- query params for dow, hour day, date
 """
 import argparse
 import json
 import os
 import urllib.request
 
+import requests
 from rtree import index
 from sanic import Sanic
 from sanic import response
@@ -70,7 +74,7 @@ def get_query_geom(coords):
         raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
 
 
-def get_intersect_features(query_geom, grid, idx):
+def get_intersect_features(query_geom, grid, idx, id_property="id"):
     # get the grid cells that intersect with the request geometry
     # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
@@ -84,79 +88,114 @@ def get_intersect_features(query_geom, grid, idx):
     # reduce intersection feature set with rtree (this tests polygon bbox intersection)
     for intersect_pos in idx.intersection(query_geom.bounds):
 
-        grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
-        poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
+        grid_id = list(grid.keys())[intersect_pos]
+        poly = shape(grid[grid_id]["geometry"])
 
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
-            ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
+            ids.append(grid[grid_id]["properties"][id_property])
             polys.append(poly)
 
     return ids, polys
 
+def get_flow_keys(flow):
+    '''
+    Bit of harcoding to map the flow to the corresponding dataset property
+    '''
+    if flow == "origin":
+        flow_key_init = "orig_cell_id"
+        flow_key_end = "dest_cell_id"
+    elif flow == "destination":
+        flow_key_init = "dest_cell_id"
+        flow_key_end = "orig_cell_id"
+    else:
+        # this should never happen because we validate the flow param when parsing
+        # the request
+        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
 
-def get_trip_features(intersect_ids, grid, flow, mode):
+    return [flow_key_init, flow_key_end]
+
+
+def get_trips(intersect_ids, flow_keys, mode):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
 
-    # aggregate trip count values from grid cells that match a source cell
-    trip_features_lookup = {}
+    # this flow O/D stuff can get confusing, so let's name these list elements
+    flow_key_init = flow_keys[0]
+    flow_key_end = flow_keys[1]
 
-    total_trips = 0
+    # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
+    intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
 
-    if flow == "origin":
-        flow_key = "orig_cell_ids"
-    elif flow == "destination":
-        flow_key = "dest_cell_ids"
+    # todo: placeholder for aditional query handling
+    query_params = {
+        'start_time' : '',
+        'end_time' : '',
+        'council_district_start' : '',
+        'council_district_end' : '',
+        'dow' : '',
+        'month' : '',
+        'hour' : '',
+    }
 
-    for intersect_cell_id in intersect_ids:
+    query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) and {flow_key_init} not in ('OUT_OF_BOUNDS') and {flow_key_end} not in ('OUT_OF_BOUNDS') group by {flow_key_end} limit 10000000"
 
-        if flow_key in grid["FeatureIndex"][intersect_cell_id]["properties"]:
+    params = { "$query" : query }
 
-            for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
+    res = requests.get(TRIPS_URL, params, timeout=90)
 
-                count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
-                count_as_height =  count / 5    # each 5 trips will equate to 1 meter of height on the map
+    res.raise_for_status()
 
-                if count:
-                    if trip_cell_id not in trip_features_lookup:
-                        '''
-                        Add a new entry in the trip features lookup, dropping all feature
-                        properties except current count
-                        '''
-                        trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = {
-                            "trips" : 0,
-                            "cell_id": int(trip_cell_id),
-                            "count_as_height": count_as_height
-                        }
+    return res.json()
 
-                    trip_features_lookup[trip_cell_id]["properties"]["trips"] += count                
-                    total_trips += count
 
-    # assemble matched features into geojson structure
-    trip_features = {"type": "FeatureCollection" }
+def build_geojson(grid, trips, flow_key_start):
+    '''
+    Combine trip counts with their corresponding geojson feature, returning a geojson
+    object with counts assigned to `trips` property
+    '''
+    geojson = {"type":"FeatureCollection","features":[]}
 
-    trip_features["features"] = [trip_features_lookup[cell_id] for cell_id in trip_features_lookup.keys()]
+    for cell in trips:
+        cell_id = cell.get(flow_key_start)
+        feature = grid.get(cell_id)
 
-    return {"features": trip_features, "total_trips": total_trips}
+        count = int(cell.get("trip_count"))
 
+        count_as_height =  count / 5  # each 5 trips will equate to 1 meter of height on the map
+
+        feature["properties"]["trips"] = count
+        feature["properties"]["count_as_height"] = count_as_height
+        feature["properties"]["cell_id"] = int(cell_id)
+        feature["properties"]["trips"] = count
+        geojson["features"].append(feature)
+
+    return geojson
+
+
+def get_total_trips(trips):
+    return sum([int(trip["trip_count"]) for trip in trips])
+    
 
 dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/grid.json")
+source = os.path.join(dirname, "data/hex500_indexed.json")
 
 with open(source, "r") as fin:
-    data = json.loads(fin.read())
-    idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
+
+    TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    
+    grid = json.loads(fin.read())
+    idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
     app = Sanic(__name__)
     CORS(app)
 
 
 @app.get("/trips", version=1)
 async def trip_handler(request):
-    print(request)
     flow = parse_flow(request.args)
+
+    flow_keys = get_flow_keys(flow)
 
     mode = parse_mode(request.args)
 
@@ -164,19 +203,25 @@ async def trip_handler(request):
 
     query_geom = get_query_geom(coords)
 
-    intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trip_features = get_trip_features(intersect_ids, data, flow, mode)
+    trips = get_trips(intersect_ids, flow_keys, mode)
+
+    response_data = {}
+
+    response_data['features'] = build_geojson(grid, trips, flow_keys[1])
+
+    response_data ['total_trips'] = get_total_trips(trips)
 
     intersect_poly = cascaded_union(intersect_polys)
 
-    trip_features["intersect_feature"] = mapping(intersect_poly)
+    response_data["intersect_feature"] = mapping(intersect_poly)
 
-    return response.json(trip_features)
+    return response.json(response_data)
 
 @app.route('/reload', version=1)
 async def index(request):
-    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/grid.json")
+    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json")
     return response.text("Reloaded")
 
 @app.route('/', version=1)
@@ -186,3 +231,10 @@ async def index(request):
 @app.exception(exceptions.NotFound)
 async def ignore_404s(request, exception):
     return response.text("Page not found: {}".format(request.url))
+
+#
+# TODO: does this break the app deployment? Handy for local deve but seem to remember
+# TODO: a good reason for removing it
+#
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=8000, debug=True)
