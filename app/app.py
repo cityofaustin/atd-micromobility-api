@@ -128,7 +128,7 @@ def get_trips(intersect_ids, flow_keys, mode):
     # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
     intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
 
-    # todo: this
+    # todo: placeholder for aditional query handling
     query_params = {
         'start_time' : '',
         'end_time' : '',
@@ -143,7 +143,7 @@ def get_trips(intersect_ids, flow_keys, mode):
 
     params = { "$query" : query }
 
-    res = requests.get(TRIPS_URL, params)
+    res = requests.get(TRIPS_URL, params, timeout=90)
 
     res.raise_for_status()
 
@@ -182,7 +182,7 @@ dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/hex500_indexed.json")
 
 with open(source, "r") as fin:
-    # TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
+
     TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
     
     grid = json.loads(fin.read())
@@ -205,7 +205,6 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    # intersect_ids = ['014550']
     trips = get_trips(intersect_ids, flow_keys, mode)
 
     response_data = {}
@@ -238,4 +237,4 @@ async def ignore_404s(request, exception):
 # TODO: a good reason for removing it
 #
 # if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=8000, debug=True)
+#     app.run(host="0.0.0.0", port=8000, debug=True)
