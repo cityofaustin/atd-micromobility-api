@@ -2,15 +2,14 @@
 Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
-
-#TODO:
-- query params for dow, hour day, date
 """
 import argparse
+from datetime import datetime
 import json
 import os
 import urllib.request
 
+import pytz
 import requests
 from rtree import index
 from sanic import Sanic
@@ -49,6 +48,24 @@ def parse_mode(args):
         return "bicycle"
     else:
         raise exceptions.ServerError("Unsupported mode specified. Must be either scooter, bicycle, or all (default).", status_code=500)
+
+
+def to_local_string(timestamp):
+
+    if not timestamp:
+        return None
+
+    try:
+        timestamp = int(float(timestamp)) / 1000
+    
+    except ValueError:
+        raise exceptions.ServerError(f"{date_param} must be a number representing Unix time in milliseconds.", status_code=500)
+
+    dt = datetime.utcfromtimestamp(timestamp)
+    
+    dt.replace(tzinfo=tz)
+
+    return dt.isoformat()[0:19] # YYYY-MM-DDTHH:MM:SS
 
 
 def parse_coordinates(args):
@@ -116,7 +133,24 @@ def get_flow_keys(flow):
     return [flow_key_init, flow_key_end]
 
 
-def get_trips(intersect_ids, flow_keys, mode):
+def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params):
+    '''
+    Compose a WHERE statement for Socrata SoQL query
+    '''
+    base = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
+    
+    where_clause = ""
+
+    if params.get("start_time"):
+        where_clause += " AND start_time >= '{}'".format(params.get("start_time"))
+
+    if params.get("end_time"):
+        where_clause += " AND end_time <= '{}'".format(params.get("end_time"))
+
+    return base + where_clause
+
+
+def get_trips(intersect_ids, flow_keys, mode, **params):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
@@ -128,18 +162,9 @@ def get_trips(intersect_ids, flow_keys, mode):
     # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
     intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
 
-    # todo: placeholder for aditional query handling
-    query_params = {
-        'start_time' : '',
-        'end_time' : '',
-        'council_district_start' : '',
-        'council_district_end' : '',
-        'dow' : '',
-        'month' : '',
-        'hour' : '',
-    }
+    where_clause = get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
 
-    query = f"select count(*) as trip_count, {flow_key_end} where {flow_key_init} in ({intersect_id_string}) and {flow_key_init} not in ('OUT_OF_BOUNDS') and {flow_key_end} not in ('OUT_OF_BOUNDS') group by {flow_key_end} limit 10000000"
+    query = f"SELECT count(*) AS trip_count, {flow_key_end} WHERE {where_clause} GROUP BY {flow_key_end} LIMIT 10000000"
 
     params = { "$query" : query }
 
@@ -180,6 +205,7 @@ def get_total_trips(trips):
 
 dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/hex500_indexed.json")
+tz = pytz.timezone('US/Central')
 
 with open(source, "r") as fin:
 
@@ -199,13 +225,18 @@ async def trip_handler(request):
 
     mode = parse_mode(request.args)
 
+    datetimes = {
+        "start_time" : to_local_string(request.args.get('start_time')),
+        "end_time" : to_local_string(request.args.get('end_time'))
+    }
+
     coords = parse_coordinates(request.args)
 
     query_geom = get_query_geom(coords)
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trips = get_trips(intersect_ids, flow_keys, mode)
+    trips = get_trips(intersect_ids, flow_keys, mode, **datetimes)
 
     response_data = {}
 
@@ -236,5 +267,5 @@ async def ignore_404s(request, exception):
 # TODO: does this break the app deployment? Handy for local deve but seem to remember
 # TODO: a good reason for removing it
 #
-# if __name__ == "__main__":
-#     app.run(host="0.0.0.0", port=8000, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
