@@ -10,6 +10,29 @@ def test_get_request_valid():
     assert response.status == 200
 
 
+def test_invalid_datetime():
+    params = {
+        "xy": "-97.7509434127,30.27618598841",
+        "start_time": "pizza",
+        "end_time": 1542034074000
+    }
+
+    request, response = app.test_client.get("/v1/trips", params=params)
+    assert response.status == 500
+
+
+def test_get_datetime():
+    params = {
+        "xy": "-97.7509434127,30.27618598841",
+        "start_time": 1541947674000,
+        "end_time": 1542034074000
+    }
+
+    request, response = app.test_client.get("/v1/trips", params=params)
+    
+    assert response.status == 200    
+
+
 def test_get_query_geom_point():
     assert isinstance(get_query_geom([(125.6, 10.1)]), Point)
 
