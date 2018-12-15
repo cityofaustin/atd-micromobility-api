@@ -267,5 +267,5 @@ async def ignore_404s(request, exception):
 # TODO: does this break the app deployment? Handy for local deve but seem to remember
 # TODO: a good reason for removing it
 #
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+# if __name__ == "__main__":
+    # app.run(host="0.0.0.0", port=8000, debug=True)
