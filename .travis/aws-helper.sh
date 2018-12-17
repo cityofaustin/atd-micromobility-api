@@ -47,6 +47,7 @@ function restart_all_tasks {
   echo "Stopping any old remaining containers (autoscaling should spawn new tasks)"
   for DOCKLESS_TASK_ID in $(aws ecs list-tasks --cluster $DOCKLESS_CLUSTER | jq -r ".taskArns[] | split(\"/\") | .[1]");
   do
-	  aws ecs stop-task --cluster $DOCKLESS_CLUSTER --task $DOCKLESS_TASK_ID
+	echo "Stopping task id: ${DOCKLESS_TASK_ID}";
+	aws ecs stop-task --cluster $DOCKLESS_CLUSTER --task $DOCKLESS_TASK_ID;
   done
 }
