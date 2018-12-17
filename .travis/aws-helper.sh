@@ -42,11 +42,11 @@ function build_dockless {
 #
 function restart_all_tasks {
   echo "Updating ECS Cluster"
-	aws ecs update-service --force-new-deployment --cluster $DOCKLESS_CLUSTER --service $DOCKLESS_SERVICE
+  aws ecs update-service --force-new-deployment --cluster $DOCKLESS_CLUSTER --service $DOCKLESS_SERVICE
 
-	echo "Stopping any old remaining containers (autoscaling should spawn new tasks)"
-	for DOCKLESS_TASK_ID in $(aws ecs list-tasks --cluster $DOCKLESS_CLUSTER | jq -r ".taskArns[] | split(\"/\") | .[1]");
-	do
-		aws ecs stop-task --cluster $DOCKLESS_CLUSTER --task $DOCKLESS_TASK_ID
-	done
+  echo "Stopping any old remaining containers (autoscaling should spawn new tasks)"
+  for DOCKLESS_TASK_ID in $(aws ecs list-tasks --cluster $DOCKLESS_CLUSTER | jq -r ".taskArns[] | split(\"/\") | .[1]");
+  do
+	  aws ecs stop-task --cluster $DOCKLESS_CLUSTER --task $DOCKLESS_TASK_ID
+  done
 }
