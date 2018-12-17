@@ -41,6 +41,12 @@ function build_dockless {
 # with the latest version of the code and/or latest version of the database.
 #
 function restart_all_tasks {
-  echo "Rebooting all tasks in ECS"
-  aws ecs update-service --force-new-deployment --cluster $DOCKLESS_CLUSTER --service $DOCKLESS_SERVICE
+  echo "Updating ECS Cluster"
+	aws ecs update-service --force-new-deployment --cluster $DOCKLESS_CLUSTER --service $DOCKLESS_SERVICE
+
+	echo "Stopping any old remaining containers (autoscaling should spawn new tasks)"
+	for DOCKLESS_TASK_ID in $(aws ecs list-tasks --cluster $DOCKLESS_CLUSTER | jq -r ".taskArns[] | split(\"/\") | .[1]");
+	do
+		aws ecs stop-task --cluster $DOCKLESS_CLUSTER --task $DOCKLESS_TASK_ID
+	done
 }
