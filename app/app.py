@@ -36,18 +36,24 @@ def parse_flow(args):
     elif args.get("flow") == "destination":
         return "destination"
     else:
-        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
+        raise exceptions.ServerError(
+            "Unsupported flow specified. Must be either origin (default) or destination.",
+            status_code=500,
+        )
 
 
 def parse_mode(args):
     if not args.get("mode") or args.get("mode") == "all":
-        return "total"
+        return "all"
     elif args.get("mode") == "scooter":
         return "scooter"
     elif args.get("mode") == "bicycle":
         return "bicycle"
     else:
-        raise exceptions.ServerError("Unsupported mode specified. Must be either scooter, bicycle, or all (default).", status_code=500)
+        raise exceptions.ServerError(
+            "Unsupported mode specified. Must be either scooter, bicycle, or all (default).",
+            status_code=500,
+        )
 
 
 def to_local_string(timestamp):
@@ -57,15 +63,18 @@ def to_local_string(timestamp):
 
     try:
         timestamp = int(float(timestamp)) / 1000
-    
+
     except ValueError:
-        raise exceptions.ServerError(f"{date_param} must be a number representing Unix time in milliseconds.", status_code=500)
+        raise exceptions.ServerError(
+            f"{date_param} must be a number representing Unix time in milliseconds.",
+            status_code=500,
+        )
 
     dt = datetime.utcfromtimestamp(timestamp)
-    
+
     dt.replace(tzinfo=tz)
 
-    return dt.isoformat()[0:19] # YYYY-MM-DDTHH:MM:SS
+    return dt.isoformat()[0:19]  # YYYY-MM-DDTHH:MM:SS
 
 
 def parse_coordinates(args):
@@ -77,7 +86,10 @@ def parse_coordinates(args):
     try:
         elements = [float(elem) for elem in elements]
     except ValueError:
-        raise exceptions.ServerError("Unable to handle xy. Verify that xy is a comma-separated string of numbers.", status_code=500)
+        raise exceptions.ServerError(
+            "Unable to handle xy. Verify that xy is a comma-separated string of numbers.",
+            status_code=500,
+        )
 
     return [tuple(elements[x : x + 2]) for x in range(0, len(elements), 2)]
 
@@ -88,7 +100,10 @@ def get_query_geom(coords):
     elif len(coords) > 2:
         return asPolygon(coords)
     else:
-        raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
+        raise exceptions.ServerError(
+            "Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.",
+            status_code=500,
+        )
 
 
 def get_intersect_features(query_geom, grid, idx, id_property="id"):
@@ -115,10 +130,11 @@ def get_intersect_features(query_geom, grid, idx, id_property="id"):
 
     return ids, polys
 
+
 def get_flow_keys(flow):
-    '''
+    """
     Bit of harcoding to map the flow to the corresponding dataset property
-    '''
+    """
     if flow == "origin":
         flow_key_init = "orig_cell_id"
         flow_key_end = "dest_cell_id"
@@ -128,18 +144,28 @@ def get_flow_keys(flow):
     else:
         # this should never happen because we validate the flow param when parsing
         # the request
-        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
+        raise exceptions.ServerError(
+            "Unsupported flow specified. Must be either origin (default) or destination.",
+            status_code=500,
+        )
 
     return [flow_key_init, flow_key_end]
 
 
 def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params):
-    '''
+    """
     Compose a WHERE statement for Socrata SoQL query
-    '''
+    """
     base = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
-    
+
     where_clause = ""
+
+    mode = params.get("mode")
+
+    if mode == "bicycle" or mode == "scooter":
+        # if the request does not explicity define a mode it is left out of the query
+        # (resulting in all records being selected regardless of mode)
+        where_clause += f" AND vehicle_type='{mode}'"
 
     if params.get("start_time"):
         where_clause += " AND start_time >= '{}'".format(params.get("start_time"))
@@ -150,23 +176,25 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     return base + where_clause
 
 
-def get_trips(intersect_ids, flow_keys, mode, **params):
-    '''
+def get_trips(intersect_ids, flow_keys, **params):
+    """
     Given a list of cell ids, extract trip count properties from the source grid data.
-    '''
+    """
 
     # this flow O/D stuff can get confusing, so let's name these list elements
     flow_key_init = flow_keys[0]
     flow_key_end = flow_keys[1]
 
     # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
-    intersect_id_string = ', '.join([f"'{id_}'" for id_ in intersect_ids])
+    intersect_id_string = ", ".join([f"'{id_}'" for id_ in intersect_ids])
 
-    where_clause = get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
+    where_clause = get_where_clause(
+        flow_key_init, flow_key_end, intersect_id_string, **params
+    )
 
     query = f"SELECT count(*) AS trip_count, {flow_key_end} WHERE {where_clause} GROUP BY {flow_key_end} LIMIT 10000000"
 
-    params = { "$query" : query }
+    params = {"$query": query}
 
     res = requests.get(TRIPS_URL, params, timeout=90)
 
@@ -176,11 +204,11 @@ def get_trips(intersect_ids, flow_keys, mode, **params):
 
 
 def build_geojson(grid, trips, flow_key_start):
-    '''
+    """
     Combine trip counts with their corresponding geojson feature, returning a geojson
     object with counts assigned to `trips` property
-    '''
-    geojson = {"type":"FeatureCollection","features":[]}
+    """
+    geojson = {"type": "FeatureCollection", "features": []}
 
     for cell in trips:
         cell_id = cell.get(flow_key_start)
@@ -188,7 +216,9 @@ def build_geojson(grid, trips, flow_key_start):
 
         count = int(cell.get("trip_count"))
 
-        count_as_height =  count / 5  # each 5 trips will equate to 1 meter of height on the map
+        count_as_height = (
+            count / 5
+        )  # each 5 trips will equate to 1 meter of height on the map
 
         feature["properties"]["trips"] = count
         feature["properties"]["count_as_height"] = count_as_height
@@ -201,16 +231,16 @@ def build_geojson(grid, trips, flow_key_start):
 
 def get_total_trips(trips):
     return sum([int(trip["trip_count"]) for trip in trips])
-    
+
 
 dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/hex500_indexed.json")
-tz = pytz.timezone('US/Central')
+tz = pytz.timezone("US/Central")
 
 with open(source, "r") as fin:
 
-    TRIPS_URL =  "https://data.austintexas.gov/resource/pqaf-uftu.json"
-    
+    TRIPS_URL = "https://data.austintexas.gov/resource/pqaf-uftu.json"
+
     grid = json.loads(fin.read())
     idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
     app = Sanic(__name__)
@@ -225,9 +255,10 @@ async def trip_handler(request):
 
     mode = parse_mode(request.args)
 
-    datetimes = {
-        "start_time" : to_local_string(request.args.get('start_time')),
-        "end_time" : to_local_string(request.args.get('end_time'))
+    params = {
+        "start_time": to_local_string(request.args.get("start_time")),
+        "end_time": to_local_string(request.args.get("end_time")),
+        "mode": mode,
     }
 
     coords = parse_coordinates(request.args)
@@ -236,13 +267,13 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trips = get_trips(intersect_ids, flow_keys, mode, **datetimes)
+    trips = get_trips(intersect_ids, flow_keys, **params)
 
     response_data = {}
 
-    response_data['features'] = build_geojson(grid, trips, flow_keys[1])
+    response_data["features"] = build_geojson(grid, trips, flow_keys[1])
 
-    response_data ['total_trips'] = get_total_trips(trips)
+    response_data["total_trips"] = get_total_trips(trips)
 
     intersect_poly = cascaded_union(intersect_polys)
 
@@ -250,18 +281,24 @@ async def trip_handler(request):
 
     return response.json(response_data)
 
-@app.route('/reload', version=1)
+
+@app.route("/reload", version=1)
 async def index(request):
-    urllib.request.urlretrieve(os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json")
+    urllib.request.urlretrieve(
+        os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json"
+    )
     return response.text("Reloaded")
 
-@app.route('/', version=1)
+
+@app.route("/", version=1)
 async def index(request):
     return response.text("Hello World")
+
 
 @app.exception(exceptions.NotFound)
 async def ignore_404s(request, exception):
     return response.text("Page not found: {}".format(request.url))
+
 
 #
 # TODO: does this break the app deployment? Handy for local deve but seem to remember
