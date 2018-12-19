@@ -41,7 +41,7 @@ def parse_flow(args):
 
 def parse_mode(args):
     if not args.get("mode") or args.get("mode") == "all":
-        return "total"
+        return "all"
     elif args.get("mode") == "scooter":
         return "scooter"
     elif args.get("mode") == "bicycle":
@@ -140,6 +140,13 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     base = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
     
     where_clause = ""
+    
+    mode = params.get('mode')
+
+    if mode == 'bicycle' or mode == 'scooter':
+        # if the request does not explicity define a mode it is left out of the query
+        # (resulting in all records being selected regardless of mode)
+        where_clause += f" AND vehicle_type='{mode}'"
 
     if params.get("start_time"):
         where_clause += " AND start_time >= '{}'".format(params.get("start_time"))
@@ -150,7 +157,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     return base + where_clause
 
 
-def get_trips(intersect_ids, flow_keys, mode, **params):
+def get_trips(intersect_ids, flow_keys, **params):
     '''
     Given a list of cell ids, extract trip count properties from the source grid data.
     '''
@@ -225,9 +232,10 @@ async def trip_handler(request):
 
     mode = parse_mode(request.args)
 
-    datetimes = {
+    params = {
         "start_time" : to_local_string(request.args.get('start_time')),
-        "end_time" : to_local_string(request.args.get('end_time'))
+        "end_time" : to_local_string(request.args.get('end_time')),
+        "mode" : mode
     }
 
     coords = parse_coordinates(request.args)
@@ -236,7 +244,7 @@ async def trip_handler(request):
 
     intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trips = get_trips(intersect_ids, flow_keys, mode, **datetimes)
+    trips = get_trips(intersect_ids, flow_keys, **params)
 
     response_data = {}
 
@@ -267,5 +275,5 @@ async def ignore_404s(request, exception):
 # TODO: does this break the app deployment? Handy for local deve but seem to remember
 # TODO: a good reason for removing it
 #
-# if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=8000, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
