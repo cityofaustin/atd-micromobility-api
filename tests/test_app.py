@@ -55,8 +55,8 @@ def test_parse_flow():
 
 def test_parse_mode():
     assert parse_mode({"mode": "scooter"}) == "scooter"
-    assert parse_mode({"mode": "all"}) == "total"
-    assert parse_mode({"mode": None}) == "total"
+    assert parse_mode({"mode": "all"}) == "all"
+    assert parse_mode({"mode": None}) == "all"
     assert parse_mode({"mode": "bicycle"}) == "bicycle"
 
     with pytest.raises(exceptions.ServerError):
