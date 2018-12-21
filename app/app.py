@@ -239,7 +239,7 @@ tz = pytz.timezone("US/Central")
 
 with open(source, "r") as fin:
 
-    TRIPS_URL = "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    TRIPS_URL = "https://data.austintexas.gov/resource/7d8e-dm7r.json"
 
     grid = json.loads(fin.read())
     idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
