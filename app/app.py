@@ -194,14 +194,10 @@ def get_trips(intersect_ids, flow_keys, **params):
 
     query = f"SELECT count(*) AS trip_count, {flow_key_end} WHERE {where_clause} GROUP BY {flow_key_end} LIMIT 10000000"
 
-    print(f"****** {query}")
-
     params = {"$query": query}
 
     res = requests.get(TRIPS_URL, params, timeout=90)
 
-    print(res.headers)
-    
     res.raise_for_status()
 
     return res.json()
