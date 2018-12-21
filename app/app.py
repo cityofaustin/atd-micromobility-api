@@ -72,7 +72,7 @@ def to_local_string(timestamp):
 
     dt = datetime.utcfromtimestamp(timestamp)
 
-    dt.replace(tzinfo=tz)
+    dt.astimezone(tz)
 
     return dt.isoformat()[0:19]  # YYYY-MM-DDTHH:MM:SS
 
@@ -239,7 +239,7 @@ tz = pytz.timezone("US/Central")
 
 with open(source, "r") as fin:
 
-    TRIPS_URL = "https://data.austintexas.gov/resource/pqaf-uftu.json"
+    TRIPS_URL = "https://data.austintexas.gov/resource/7d8e-dm7r.json"
 
     grid = json.loads(fin.read())
     idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
@@ -305,4 +305,4 @@ async def ignore_404s(request, exception):
 # TODO: a good reason for removing it
 #
 # if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=8000, debug=True)
+#     app.run(host="0.0.0.0", port=8000, debug=True)
