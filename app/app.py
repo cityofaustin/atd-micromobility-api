@@ -31,27 +31,34 @@ def spatial_index(features):
 
 
 def parse_flow(args):
-    if not args.get("flow") or args.get("flow") == "origin":
+    if not args.get("flow")
         return "origin"
-    elif args.get("flow") == "destination":
+
+    elif args.get("flow").lower() == "origin":
+        return "origin"
+
+    elif args.get("flow").lower() == "destination":
         return "destination"
+
     else:
         raise exceptions.ServerError(
-            "Unsupported flow specified. Must be either origin (default) or destination.",
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
             status_code=500,
         )
 
 
 def parse_mode(args):
-    if not args.get("mode") or args.get("mode") == "all":
+    if not args.get("mode")
         return "all"
-    elif args.get("mode") == "scooter":
+    elif args.get("mode").lower() == "all":
+        return "all"
+    elif args.get("mode").lower() == "scooter":
         return "scooter"
-    elif args.get("mode") == "bicycle":
+    elif args.get("mode").lower() == "bicycle":
         return "bicycle"
     else:
         raise exceptions.ServerError(
-            "Unsupported mode specified. Must be either scooter, bicycle, or all (default).",
+            "Unsupported mode specified. Must be either `scooter`, `bicycle`, or `all` (default).",
             status_code=500,
         )
 
@@ -145,7 +152,7 @@ def get_flow_keys(flow):
         # this should never happen because we validate the flow param when parsing
         # the request
         raise exceptions.ServerError(
-            "Unsupported flow specified. Must be either origin (default) or destination.",
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
             status_code=500,
         )
 
