@@ -162,7 +162,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
 
     # exclude trips that don't meet our minimum criteria to be considered valid
     trip_filter = " trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
-    
+
     where_clause = id_filter + trip_filter
 
     mode = params.get("mode")
@@ -310,4 +310,4 @@ async def ignore_404s(request, exception):
 # TODO: a good reason for removing it
 #
 # if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=8000, debug=True)
+# app.run(host="0.0.0.0", port=8000, debug=True)
