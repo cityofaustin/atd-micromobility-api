@@ -156,15 +156,20 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     """
     Compose a WHERE statement for Socrata SoQL query
     """
-    base = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
 
-    where_clause = ""
+    # select matching cell ids by flow
+    id_filter = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
+
+    # exclude trips that don't meet our minimum criteria to be considered valid
+    trip_filter = " trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
+    
+    where_clause = id_filter + trip_filter
 
     mode = params.get("mode")
 
     if mode == "bicycle" or mode == "scooter":
         # if the request does not explicity define a mode it is left out of the query
-        # (resulting in all records being selected regardless of mode)
+        # resulting in all records being selected regardless of mode
         where_clause += f" AND vehicle_type='{mode}'"
 
     if params.get("start_time"):
