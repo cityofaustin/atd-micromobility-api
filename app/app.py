@@ -31,27 +31,34 @@ def spatial_index(features):
 
 
 def parse_flow(args):
-    if not args.get("flow") or args.get("flow") == "origin":
+    if not args.get("flow"):
         return "origin"
-    elif args.get("flow") == "destination":
+
+    elif args.get("flow").lower() == "origin":
+        return "origin"
+
+    elif args.get("flow").lower() == "destination":
         return "destination"
+
     else:
         raise exceptions.ServerError(
-            "Unsupported flow specified. Must be either origin (default) or destination.",
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
             status_code=500,
         )
 
 
 def parse_mode(args):
-    if not args.get("mode") or args.get("mode") == "all":
+    if not args.get("mode"):
         return "all"
-    elif args.get("mode") == "scooter":
+    elif args.get("mode").lower() == "all":
+        return "all"
+    elif args.get("mode").lower() == "scooter":
         return "scooter"
-    elif args.get("mode") == "bicycle":
+    elif args.get("mode").lower() == "bicycle":
         return "bicycle"
     else:
         raise exceptions.ServerError(
-            "Unsupported mode specified. Must be either scooter, bicycle, or all (default).",
+            "Unsupported mode specified. Must be either `scooter`, `bicycle`, or `all` (default).",
             status_code=500,
         )
 
@@ -145,7 +152,7 @@ def get_flow_keys(flow):
         # this should never happen because we validate the flow param when parsing
         # the request
         raise exceptions.ServerError(
-            "Unsupported flow specified. Must be either origin (default) or destination.",
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
             status_code=500,
         )
 
@@ -156,15 +163,20 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     """
     Compose a WHERE statement for Socrata SoQL query
     """
-    base = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
 
-    where_clause = ""
+    # select matching cell ids by flow
+    id_filter = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
+
+    # exclude trips that don't meet our minimum criteria to be considered valid
+    trip_filter = " AND trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
+
+    where_clause = id_filter + trip_filter
 
     mode = params.get("mode")
 
     if mode == "bicycle" or mode == "scooter":
         # if the request does not explicity define a mode it is left out of the query
-        # (resulting in all records being selected regardless of mode)
+        # resulting in all records being selected regardless of mode
         where_clause += f" AND vehicle_type='{mode}'"
 
     if params.get("start_time"):
@@ -173,7 +185,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     if params.get("end_time"):
         where_clause += " AND end_time <= '{}'".format(params.get("end_time"))
 
-    return base + where_clause
+    return where_clause
 
 
 def get_trips(intersect_ids, flow_keys, **params):
