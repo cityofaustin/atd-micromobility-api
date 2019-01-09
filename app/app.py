@@ -31,7 +31,7 @@ def spatial_index(features):
 
 
 def parse_flow(args):
-    if not args.get("flow")
+    if not args.get("flow"):
         return "origin"
 
     elif args.get("flow").lower() == "origin":
@@ -48,7 +48,7 @@ def parse_flow(args):
 
 
 def parse_mode(args):
-    if not args.get("mode")
+    if not args.get("mode"):
         return "all"
     elif args.get("mode").lower() == "all":
         return "all"
@@ -168,7 +168,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     id_filter = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
 
     # exclude trips that don't meet our minimum criteria to be considered valid
-    trip_filter = " trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
+    trip_filter = " AND trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
 
     where_clause = id_filter + trip_filter
 
@@ -185,7 +185,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     if params.get("end_time"):
         where_clause += " AND end_time <= '{}'".format(params.get("end_time"))
 
-    return base + where_clause
+    return where_clause
 
 
 def get_trips(intersect_ids, flow_keys, **params):
