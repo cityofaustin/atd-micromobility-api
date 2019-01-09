@@ -29,8 +29,9 @@ def test_get_datetime():
     }
 
     request, response = app.test_client.get("/v1/trips", params=params)
-    
-    assert response.status == 200    
+
+    assert response.status == 200
+    assert len(response.json["features"]["features"]) > 0
 
 
 def test_get_query_geom_point():
