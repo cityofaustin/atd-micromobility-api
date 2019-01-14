@@ -1,13 +1,16 @@
 """
 Dockless origin/destination trip data API
-
 # try me
-http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
+http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
 import argparse
+from datetime import datetime
 import json
 import os
+import urllib.request
 
+import pytz
+import requests
 from rtree import index
 from sanic import Sanic
 from sanic import response
@@ -28,23 +31,57 @@ def spatial_index(features):
 
 
 def parse_flow(args):
-    if not args.get("flow") or args.get("flow") == "origin":
+    if not args.get("flow"):
         return "origin"
-    elif args.get("flow") == "destination":
+
+    elif args.get("flow").lower() == "origin":
+        return "origin"
+
+    elif args.get("flow").lower() == "destination":
         return "destination"
+
     else:
-        raise exceptions.ServerError("Unsupported flow specified. Must be either origin (default) or destination.", status_code=500)
+        raise exceptions.ServerError(
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
+            status_code=500,
+        )
 
 
 def parse_mode(args):
-    if not args.get("mode") or args.get("mode") == "all":
-        return "total"
-    elif args.get("mode") == "scooter":
+    if not args.get("mode"):
+        return "all"
+    elif args.get("mode").lower() == "all":
+        return "all"
+    elif args.get("mode").lower() == "scooter":
         return "scooter"
-    elif args.get("mode") == "bicycle":
+    elif args.get("mode").lower() == "bicycle":
         return "bicycle"
     else:
-        raise exceptions.ServerError("Unsupported mode specified. Must be either scooter, bicycle, or all (default).", status_code=500)
+        raise exceptions.ServerError(
+            "Unsupported mode specified. Must be either `scooter`, `bicycle`, or `all` (default).",
+            status_code=500,
+        )
+
+
+def to_local_string(timestamp):
+
+    if not timestamp:
+        return None
+
+    try:
+        timestamp = int(float(timestamp)) / 1000
+
+    except ValueError:
+        raise exceptions.ServerError(
+            f"{date_param} must be a number representing Unix time in milliseconds.",
+            status_code=500,
+        )
+
+    dt = datetime.utcfromtimestamp(timestamp)
+
+    dt.astimezone(tz)
+
+    return dt.isoformat()[0:19]  # YYYY-MM-DDTHH:MM:SS
 
 
 def parse_coordinates(args):
@@ -52,12 +89,15 @@ def parse_coordinates(args):
         raise exceptions.ServerError("XY parameter is requried.", status_code=500)
 
     elements = args.get("xy").split(",")
-    
+
     try:
         elements = [float(elem) for elem in elements]
     except ValueError:
-        raise exceptions.ServerError("Unable to handle xy. Verify that xy is a comma-separated string of numbers.", status_code=500)
-    
+        raise exceptions.ServerError(
+            "Unable to handle xy. Verify that xy is a comma-separated string of numbers.",
+            status_code=500,
+        )
+
     return [tuple(elements[x : x + 2]) for x in range(0, len(elements), 2)]
 
 
@@ -67,10 +107,13 @@ def get_query_geom(coords):
     elif len(coords) > 2:
         return asPolygon(coords)
     else:
-        raise exceptions.ServerError("Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.", status_code=500)
-        
+        raise exceptions.ServerError(
+            "Insufficient xy coordinates provided. A LinearRing must have at least 3 coordinate tuples.",
+            status_code=500,
+        )
 
-def get_intersect_features(query_geom, grid, idx):
+
+def get_intersect_features(query_geom, grid, idx, id_property="id"):
     # get the grid cells that intersect with the request geometry
     # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
@@ -84,93 +127,194 @@ def get_intersect_features(query_geom, grid, idx):
     # reduce intersection feature set with rtree (this tests polygon bbox intersection)
     for intersect_pos in idx.intersection(query_geom.bounds):
 
-        grid_id = list(grid["FeatureIndex"].keys())[intersect_pos]
-        poly = shape(grid["FeatureIndex"][grid_id]["geometry"])
-        
+        grid_id = list(grid.keys())[intersect_pos]
+        poly = shape(grid[grid_id]["geometry"])
+
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
-            ids.append(grid["FeatureIndex"][grid_id]["properties"]["id"])
+            ids.append(grid[grid_id]["properties"][id_property])
             polys.append(poly)
 
     return ids, polys
 
 
-def get_trip_features(intersect_ids, grid, flow, mode):
-    '''
-    Given a list of cell ids, extract trip count properties from the source grid data.
-    '''    
-
-    # aggregate trip count values from grid cells that match a source cell
-    trip_features_lookup = {}
-
-    total_trips = 0
-
+def get_flow_keys(flow):
+    """
+    Bit of harcoding to map the flow to the corresponding dataset property
+    """
     if flow == "origin":
-        flow_key = "orig_cell_ids"
+        flow_key_init = "orig_cell_id"
+        flow_key_end = "dest_cell_id"
     elif flow == "destination":
-        flow_key = "dest_cell_ids"
+        flow_key_init = "dest_cell_id"
+        flow_key_end = "orig_cell_id"
+    else:
+        # this should never happen because we validate the flow param when parsing
+        # the request
+        raise exceptions.ServerError(
+            "Unsupported flow specified. Must be either `origin` (default) or `destination`.",
+            status_code=500,
+        )
 
-    for intersect_cell_id in intersect_ids:
+    return [flow_key_init, flow_key_end]
 
-        if flow_key in grid["FeatureIndex"][intersect_cell_id]["properties"]:
-            
-            for trip_cell_id in grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key].keys():
 
-                count = grid["FeatureIndex"][intersect_cell_id]["properties"][flow_key][trip_cell_id][mode]
+def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params):
+    """
+    Compose a WHERE statement for Socrata SoQL query
+    """
 
-                if count:
-                    if trip_cell_id not in trip_features_lookup:
-                        '''
-                        Add a new entry in the trip features lookup, dropping all feature
-                        properties except current count
-                        '''
-                        trip_features_lookup[trip_cell_id] = dict(grid["FeatureIndex"][trip_cell_id])
-                        trip_features_lookup[trip_cell_id]["properties"] = { "current_count" : 0 }
+    # select matching cell ids by flow
+    id_filter = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
 
-                    trip_features_lookup[trip_cell_id]["properties"]["current_count"] += count                
+    # exclude trips that don't meet our minimum criteria to be considered valid
+    trip_filter = " AND trip_distance * 0.000621371 >= 0.1 AND trip_distance * 0.000621371 < 500 AND trip_duration < 86400"
 
-                    total_trips += count
-    
-    # assemble matched features into geojson structure
-    trip_features = {"type": "FeatureCollection" } 
+    where_clause = id_filter + trip_filter
 
-    trip_features["features"] = [trip_features_lookup[cell_id] for cell_id in trip_features_lookup.keys()]
+    mode = params.get("mode")
 
-    return {"features": trip_features, "total_trips": total_trips}
+    if mode == "bicycle" or mode == "scooter":
+        # if the request does not explicity define a mode it is left out of the query
+        # resulting in all records being selected regardless of mode
+        where_clause += f" AND vehicle_type='{mode}'"
+
+    if params.get("start_time"):
+        where_clause += " AND start_time >= '{}'".format(params.get("start_time"))
+
+    if params.get("end_time"):
+        where_clause += " AND end_time <= '{}'".format(params.get("end_time"))
+
+    return where_clause
+
+
+def get_trips(intersect_ids, flow_keys, **params):
+    """
+    Given a list of cell ids, extract trip count properties from the source grid data.
+    """
+
+    # this flow O/D stuff can get confusing, so let's name these list elements
+    flow_key_init = flow_keys[0]
+    flow_key_end = flow_keys[1]
+
+    # generate a string of single-quoted ids (as if for a SQL `IN ()` statement)
+    intersect_id_string = ", ".join([f"'{id_}'" for id_ in intersect_ids])
+
+    where_clause = get_where_clause(
+        flow_key_init, flow_key_end, intersect_id_string, **params
+    )
+
+    query = f"SELECT count(*) AS trip_count, {flow_key_end} WHERE {where_clause} GROUP BY {flow_key_end} LIMIT 10000000"
+
+    params = {"$query": query}
+
+    res = requests.get(TRIPS_URL, params, timeout=90)
+
+    res.raise_for_status()
+
+    return res.json()
+
+
+def build_geojson(grid, trips, flow_key_start):
+    """
+    Combine trip counts with their corresponding geojson feature, returning a geojson
+    object with counts assigned to `trips` property
+    """
+    geojson = {"type": "FeatureCollection", "features": []}
+
+    for cell in trips:
+        cell_id = cell.get(flow_key_start)
+        feature = grid.get(cell_id)
+
+        count = int(cell.get("trip_count"))
+
+        count_as_height = (
+            count / 5
+        )  # each 5 trips will equate to 1 meter of height on the map
+
+        feature["properties"]["trips"] = count
+        feature["properties"]["count_as_height"] = count_as_height
+        feature["properties"]["cell_id"] = int(cell_id)
+        feature["properties"]["trips"] = count
+        geojson["features"].append(feature)
+
+    return geojson
+
+
+def get_total_trips(trips):
+    return sum([int(trip["trip_count"]) for trip in trips])
 
 
 dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/grid.json")
+source = os.path.join(dirname, "data/hex500_indexed.json")
+tz = pytz.timezone("US/Central")
 
 with open(source, "r") as fin:
-    data = json.loads(fin.read())   
-    idx = spatial_index(data["FeatureIndex"][feature_id] for feature_id in data["FeatureIndex"].keys())
+
+    TRIPS_URL = "https://data.austintexas.gov/resource/7d8e-dm7r.json"
+
+    grid = json.loads(fin.read())
+    idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
     app = Sanic(__name__)
     CORS(app)
 
 
-@app.get("/v1/trips")
+@app.get("/trips", version=1)
 async def trip_handler(request):
-
     flow = parse_flow(request.args)
+
+    flow_keys = get_flow_keys(flow)
 
     mode = parse_mode(request.args)
 
+    params = {
+        "start_time": to_local_string(request.args.get("start_time")),
+        "end_time": to_local_string(request.args.get("end_time")),
+        "mode": mode,
+    }
+
     coords = parse_coordinates(request.args)
-    
+
     query_geom = get_query_geom(coords)
 
-    intersect_ids, intersect_polys = get_intersect_features(query_geom, data, idx)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
 
-    trip_features = get_trip_features(intersect_ids, data, flow, mode)
+    trips = get_trips(intersect_ids, flow_keys, **params)
+
+    response_data = {}
+
+    response_data["features"] = build_geojson(grid, trips, flow_keys[1])
+
+    response_data["total_trips"] = get_total_trips(trips)
 
     intersect_poly = cascaded_union(intersect_polys)
 
-    trip_features["intersect_feature"] = mapping(intersect_poly)
+    response_data["intersect_feature"] = mapping(intersect_poly)
 
-    return response.json(trip_features)
+    return response.json(response_data)
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True, workers=8)
+@app.route("/reload", version=1)
+async def index(request):
+    urllib.request.urlretrieve(
+        os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json"
+    )
+    return response.text("Reloaded")
 
+
+@app.route("/", version=1)
+async def index(request):
+    return response.text("Hello World")
+
+
+@app.exception(exceptions.NotFound)
+async def ignore_404s(request, exception):
+    return response.text("Page not found: {}".format(request.url))
+
+
+#
+# TODO: does this break the app deployment? Handy for local deve but seem to remember
+# TODO: a good reason for removing it
+#
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=8000, debug=True)

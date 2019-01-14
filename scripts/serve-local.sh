@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 
-echo "starting..."
+BASE_CONTAINER_TAG="cityofaustin/dockless-api:base"
 
-set -o errexit
+if [ "$CLEANUP" == "on" ]; then
+  echo "Stopping all containers"
+  docker kill $(docker ps -q)
+  echo "Removing all dockless containers"
+  docker rm $(docker ps -a -q)
+  echo "Removing all dockless images"
+  docker rmi $(docker image ls | awk '{print $1}' | grep dockless)
+fi
 
-TAG='dockless-api:local'
-echo "building docker image..."
-docker build --tag "$TAG" .
-echo "running docker image..."
-
-docker run \
-  --rm \
-  -it \
-  --name dockless-api \
-  -p 80:8000 \
-  -v `pwd`:/app \
-  atddocker/dockless-api \
-  python app/app.py
+if [ "$REBUILD" == "on" ]; then
+    echo "Re-building Dockless API Docker Image"
+    docker build --no-cache -f Dockerfile.base -t $BASE_CONTAINER_TAG .
+    echo "Re-building service"
+    docker-compose -f docker-compose.local.yml up --build
+else
+    echo "Building Dockless API Docker Image"
+    docker build -f Dockerfile.base -t $BASE_CONTAINER_TAG .
+    echo "Building Service"
+    docker-compose -f docker-compose.local.yml up
+fi

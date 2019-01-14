@@ -1,33 +1,35 @@
+#
+# Dockless-API Container
+#
 
+FROM cityofaustin/dockless-api:base
 
+ARG DEPLOYMENT_MODE
+ENV DEPLOYMENT_MODE ${DEPLOYMENT_MODE:-"PRODUCTION"}
 
-FROM python:3.6
+ARG DATABASE_URL
+ENV DATABASE_URL ${DATABASE_URL:-""}
 
-#  Set the working directory
-WORKDIR /app
+ARG DATABASE_PATH
+ENV DATABASE_PATH ${DATABASE_PATH:-"/app/data/grid.json"}
 
-#  Copy package requirements
-COPY requirements.txt /app
+ARG PYTHONUNBUFFERED
+ENV PYTHONUNBUFFERED ${PYTHONUNBUFFERED:-1}
 
-RUN apt-get update
-RUN apt-get install dialog apt-utils -y
+ARG WEB_CONCURRENCY
+ENV WEB_CONCURRENCY ${WEB_CONCURRENCY:-4}
 
-# Install libspatialindex
-# See: https://github.com/libspatialindex/libspatialindex/wiki/1.-Getting-Started
-RUN apt-get install -y curl \
-  g++ \
-  make
-RUN curl -L http://download.osgeo.org/libspatialindex/spatialindex-src-1.8.5.tar.gz | tar xz
-RUN cd spatialindex-src-1.8.5 && ./configure \
-&& make \
-&& make install \
-&& ldconfig
+ARG HOST
+ENV HOST ${HOST:-"0.0.0.0"}
 
-#  Update python3-pip
-RUN python -m pip install pip --upgrade
-RUN python -m pip install wheel
+ARG PORT
+ENV PORT ${PORT:-80}
+EXPOSE $PORT
 
-#  Install python packages specified in requirements.txt
-RUN pip install --trusted-host pypi.python.org -r requirements.txt
+# We copy the source code one more time, since we are relaunching.
+COPY "$PWD/app" /app
+COPY "$PWD/docker-entrypoint.sh" /app/docker-entrypoint.sh
 
-CMD [ "python", "app.py" ]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+CMD [ "gunicorn", "app:app", "--worker-class", "sanic.worker.GunicornWorker",  "--pythonpath", "/app/" ]

@@ -1,6 +1,8 @@
 gunicorn
+pytz
 requests
 rtree
 sanic
 sanic_cors
 shapely
+wheel
