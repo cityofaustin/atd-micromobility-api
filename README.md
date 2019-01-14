@@ -1,6 +1,10 @@
 # dockless-api
 
-A dockless mobility data API built with Python/Sanic
+The Dockless API provides an interface for retrieving anonymized and aggregated [dockless mobility](https://austintexas.gov/docklessmobility) trip data in the City of Austin. This API supplies data to our interactive [Dockless Mobility Explorer](https://dockless.austintexas.io).
+
+## Table of Contents
+* [Installation](#Installation)
+* [API Reference](#api-reference)
 
 ## Installation
 
@@ -54,11 +58,15 @@ python app/app.py
 curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
 ```
 
-
 ## Running Docker
 
 ```
 docker build -f Dockerfile.base -t cityofaustin/dockless-api .
 docker tag cityofaustin/dockless-api:latest cityofaustin/dockless-api:latest
 docker push cityofaustin/dockless-api
+
 ```
+
+## API Reference
+
+[See here](reference.md)
