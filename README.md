@@ -66,3 +66,7 @@ docker tag cityofaustin/dockless-api:latest cityofaustin/dockless-api:latest
 docker push cityofaustin/dockless-api
 
 ```
+
+## API Reference
+
+[See here](reference.md)
