@@ -28,7 +28,7 @@ Given an input geometry, the trips endpoint returns a GeoJSON `FeatureCollection
 
     **Optional Trip Filters:**
 
-    `mode=all` The mode transport. Either `bicycle`, `scooter`, or `all` (default).
+    `mode=all` The mode of transport. Either `bicycle`, `scooter`, or `all` (default).
 
     `flow=origin` Indicates if trips originated in the input geometry (`origin`) or terminated in the input geometry (`destination`).
 
