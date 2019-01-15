@@ -10,7 +10,7 @@ The Dockless API provides an interface for retrieving anonymized and aggregated 
 
 ### About the "Database"
 
-The source database for the API is a modified geojson file. TODO: add sample data and link to processing tools to generate source data.
+The source database for the API is our [Dockless Vehicle Trips](https://data.austintexas.gov/Transportation-and-Mobility/Dockless-Vehicle-Trips/7d8e-dm7r) dataset.
 
 ### Option 1: Run w/ Docker (Suggested)
 
@@ -20,13 +20,11 @@ The source database for the API is a modified geojson file. TODO: add sample dat
 2.  Clone repo and `cd` into it.
     `git clone https://github.com/cityofaustin/dockless-api.git`
 
-3.  Copy `grid.json` source data to `../dockless-api/app/data`
-
-4.  Start the docker server (in the background on port 80)
+3.  Start the docker server (in the background on port 80)
 
 `./scripts/serve-local.sh`
 
-5.  Make a request:
+4.  Make a request:
 
 ```shell
 curl http://localhost:80/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
@@ -44,15 +42,13 @@ pip install -r requirements.txt
 
 3.  Install [libspatialindex](http://libspatialindex.github.io/)
 
-4.  Copy `grid.json` source data to `../dockless-api/app/data`
-
-5.  Start the server:
+4.  Start the server:
 
 ```python
 python app/app.py
 ```
 
-6.  Make a request:
+5.  Make a request:
 
 ```shell
 curl http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination
