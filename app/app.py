@@ -77,11 +77,16 @@ def to_local_string(timestamp):
             status_code=500,
         )
 
-    dt = datetime.utcfromtimestamp(timestamp)
+    # for god knows why utcfromtimestamp returns a naive timestamp.
+    # so we have to append `.replace(tzinfo=pytz.utc)` to make it tz aware
+    dt = datetime.utcfromtimestamp(timestamp).replace(tzinfo=pytz.utc)
 
-    dt.astimezone(tz)
+    # and now we can represent the time in local time
+    local = dt.astimezone(tz)
 
-    return dt.isoformat()[0:19]  # YYYY-MM-DDTHH:MM:SS
+    # we lop off the tz info from the timestamp because we're going
+    # to pass socrata a "local" naive timestamp (YYYY-MM-DDTHH:MM:SS)
+    return local.isoformat()[0:19]
 
 
 def parse_coordinates(args):
