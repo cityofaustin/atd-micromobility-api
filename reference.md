@@ -4,7 +4,7 @@
 
 Dockless API calls described below can be made via the following semantically versioned endpoint:
 
-`https://dockless-api.austintexas.io/v1[/request]`
+`https://dockless-data.austintexas.io/v1[/request]`
 
 ### Trips
 ----
