@@ -23,8 +23,12 @@ Given an input geometry, the trips endpoint returns a GeoJSON `FeatureCollection
 
     **Required:**
 
-    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The endpoint expects either one coordinate (a *point*: `[lng1],[lng2]`) or three or more coordinates (a *polygon*: `[lng1],[lat1],[lng2],[lat2],[lng3],[lat3]...`).
+    `xy=[lng1],[lat1],[lng2],[lat2]...` a comma-separated string of latitude and longitude coordinates expressed as decimal degrees. The endpoint expects either one coordinate (a *point*: `[lng1],[lat1]`) or three or more coordinates (a *polygon*: `[lng1],[lat1],[lng2],[lat2],[lng3],[lat3]...`).
     *Note: Line references and multipart polygons are not currently supported*
+    
+    *Example API point call:*
+    
+    `https://dockless-data.austintexas.io/v1/trips?xy=-97.743797,30.294499&start_time=1551280000&end_time=1551298973&mode=all&flow=origin`
 
     **Optional Trip Filters:**
 
