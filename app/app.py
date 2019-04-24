@@ -149,9 +149,9 @@ def get_flow_keys(flow):
     """
     if flow == "origin":
         flow_key_init = "census_geoid_start"
-        flow_key_end = "cenus_geoid_end"
+        flow_key_end = "census_geoid_end"
     elif flow == "destination":
-        flow_key_init = "cenus_geoid_end"
+        flow_key_init = "census_geoid_end"
         flow_key_end = "census_geoid_start"
     else:
         # this should never happen because we validate the flow param when parsing
