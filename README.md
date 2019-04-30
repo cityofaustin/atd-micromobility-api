@@ -66,3 +66,10 @@ docker push cityofaustin/dockless-api
 ## API Reference
 
 [See here](reference.md)
+
+
+## Deployment
+
+Code in the `master` branch is automatically deployed to Amazon ECS (Elastic Container Service) which updates the Docker image and deploys the new code to all running containers via Fargate. Credit to @sergiogcx for setting up this deployment for our team!
+
+- [Password-protected link to AWS Console](https://us-east-1.console.aws.amazon.com/ecr/repositories/cityofaustin/dockless-api/?region=us-east-1)
