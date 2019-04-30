@@ -21,7 +21,7 @@ from shapely.ops import cascaded_union
 
 
 def spatial_index(features):
-    # create spatial index of grid cell features
+    # create spatial index of census tract features
     # features: geojson feature array
     idx = index.Index()
     for pos, feature in enumerate(features):
@@ -118,8 +118,8 @@ def get_query_geom(coords):
         )
 
 
-def get_intersect_features(query_geom, grid, idx, id_property="id"):
-    # get the grid cells that intersect with the request geometry
+def get_intersect_features(query_geom, polygons, idx, id_property="GEOID10"):
+    # get the census tracts that intersect with the request geometry
     # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
     polys = []
@@ -132,12 +132,12 @@ def get_intersect_features(query_geom, grid, idx, id_property="id"):
     # reduce intersection feature set with rtree (this tests polygon bbox intersection)
     for intersect_pos in idx.intersection(query_geom.bounds):
 
-        grid_id = list(grid.keys())[intersect_pos]
-        poly = shape(grid[grid_id]["geometry"])
+        poly_id = list(polygons.keys())[intersect_pos]
+        poly = shape(polygons[poly_id]["geometry"])
 
         # check if poly actually interesects with request geom
         if query_geom.intersects(poly):
-            ids.append(grid[grid_id]["properties"][id_property])
+            ids.append(polygons[poly_id]["properties"][id_property])
             polys.append(poly)
 
     return ids, polys
@@ -148,11 +148,11 @@ def get_flow_keys(flow):
     Bit of harcoding to map the flow to the corresponding dataset property
     """
     if flow == "origin":
-        flow_key_init = "orig_cell_id"
-        flow_key_end = "dest_cell_id"
+        flow_key_init = "census_geoid_start"
+        flow_key_end = "census_geoid_end"
     elif flow == "destination":
-        flow_key_init = "dest_cell_id"
-        flow_key_end = "orig_cell_id"
+        flow_key_init = "census_geoid_end"
+        flow_key_end = "census_geoid_start"
     else:
         # this should never happen because we validate the flow param when parsing
         # the request
@@ -169,7 +169,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
     Compose a WHERE statement for Socrata SoQL query
     """
 
-    # select matching cell ids by flow
+    # select matching tract ids by flow
     id_filter = f"{flow_key_init} IN ({intersect_id_string}) AND {flow_key_init} NOT IN ('OUT_OF_BOUNDS') AND {flow_key_end} NOT IN ('OUT_OF_BOUNDS')"
 
     # exclude trips that don't meet our minimum criteria to be considered valid
@@ -195,7 +195,7 @@ def get_where_clause(flow_key_init, flow_key_end, intersect_id_string, **params)
 
 def get_trips(intersect_ids, flow_keys, **params):
     """
-    Given a list of cell ids, extract trip count properties from the source grid data.
+    Given a list of census tract ids, extract trip count properties from the source polygon data.
     """
 
     # this flow O/D stuff can get confusing, so let's name these list elements
@@ -220,18 +220,18 @@ def get_trips(intersect_ids, flow_keys, **params):
     return res.json()
 
 
-def build_geojson(grid, trips, flow_key_start):
+def build_geojson(polygons, trips, flow_key_start):
     """
     Combine trip counts with their corresponding geojson feature, returning a geojson
     object with counts assigned to `trips` property
     """
     geojson = {"type": "FeatureCollection", "features": []}
 
-    for cell in trips:
-        cell_id = cell.get(flow_key_start)
-        feature = grid.get(cell_id)
+    for tract in trips:
+        tract_id = tract.get(flow_key_start)
+        feature = polygons.get(tract_id)
 
-        count = int(cell.get("trip_count"))
+        count = int(tract.get("trip_count"))
 
         count_as_height = (
             count / 5
@@ -239,7 +239,7 @@ def build_geojson(grid, trips, flow_key_start):
 
         feature["properties"]["trips"] = count
         feature["properties"]["count_as_height"] = count_as_height
-        feature["properties"]["cell_id"] = int(cell_id)
+        feature["properties"]["tract_id"] = int(tract_id)
         feature["properties"]["trips"] = count
         geojson["features"].append(feature)
 
@@ -251,15 +251,15 @@ def get_total_trips(trips):
 
 
 dirname = os.path.dirname(__file__)
-source = os.path.join(dirname, "data/hex500_indexed.json")
+source = os.path.join(dirname, "data/census_tracts_2010_simplified_20pct_indexed.json")
 tz = pytz.timezone("US/Central")
 
 with open(source, "r") as fin:
 
     TRIPS_URL = "https://data.austintexas.gov/resource/7d8e-dm7r.json"
 
-    grid = json.loads(fin.read())
-    idx = spatial_index(grid[feature_id] for feature_id in grid.keys())
+    census_tracts = json.loads(fin.read())
+    idx = spatial_index(census_tracts[feature_id] for feature_id in census_tracts.keys())
     app = Sanic(__name__)
     CORS(app)
 
@@ -282,13 +282,13 @@ async def trip_handler(request):
 
     query_geom = get_query_geom(coords)
 
-    intersect_ids, intersect_polys = get_intersect_features(query_geom, grid, idx)
+    intersect_ids, intersect_polys = get_intersect_features(query_geom, census_tracts, idx)
 
     trips = get_trips(intersect_ids, flow_keys, **params)
 
     response_data = {}
 
-    response_data["features"] = build_geojson(grid, trips, flow_keys[1])
+    response_data["features"] = build_geojson(census_tracts, trips, flow_keys[1])
 
     response_data["total_trips"] = get_total_trips(trips)
 
@@ -321,5 +321,5 @@ async def ignore_404s(request, exception):
 # TODO: does this break the app deployment? Handy for local deve but seem to remember
 # TODO: a good reason for removing it
 #
-# if __name__ == "__main__":
-#     app.run(host="0.0.0.0", port=8000, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)
