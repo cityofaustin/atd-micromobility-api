@@ -118,7 +118,7 @@ def get_query_geom(coords):
         )
 
 
-def get_intersect_features(query_geom, polygons, idx, id_property="GEOID10"):
+def get_intersect_features(query_geom, polygons, idx, id_property="cell_id"):
     # get the census tracts that intersect with the request geometry
     # see: https://stackoverflow.com/questions/14697442/faster-way-of-polygon-intersection-with-shapely
     ids = []
