@@ -307,9 +307,10 @@ async def index(request):
     return response.text("Reloaded")
 
 
-@app.route("/", version=1)
+@app.route("/")
 async def index(request):
-    return response.text("Hello World")
+    now = datetime.now().isoformat()
+    return response.text(f"Dockless API Online at {now}")
 
 
 @app.exception(exceptions.NotFound)
