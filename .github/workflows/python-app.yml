@@ -28,6 +28,9 @@ jobs:
       run: |
         export BRANCH_NAME=${GITHUB_REF##*/}
         python -m pip install --upgrade pip
+        pip install virtualenv
+        virtualenv venv
+        source venv/bin/activate
         pip install -r requirements.txt
         source ./.github/workflows/aws-helper.sh
         deploy_aws_lambda
