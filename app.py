@@ -236,11 +236,12 @@ def build_geojson(polygons, trips, flow_key_start):
             count / 5
         )  # each 5 trips will equate to 1 meter of height on the map
 
-        feature["properties"]["trips"] = count
-        feature["properties"]["count_as_height"] = count_as_height
-        feature["properties"]["tract_id"] = int(tract_id)
-        feature["properties"]["trips"] = count
-        geojson["features"].append(feature)
+        if feature:
+            feature["properties"]["trips"] = count
+            feature["properties"]["count_as_height"] = count_as_height
+            feature["properties"]["tract_id"] = int(tract_id)
+            feature["properties"]["trips"] = count
+            geojson["features"].append(feature)
 
     return geojson
 
