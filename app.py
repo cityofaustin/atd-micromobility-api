@@ -3,21 +3,20 @@ Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
-import argparse
-from datetime import datetime
+import pytz
 import json
 import os
-import urllib.request
-
-import pytz
 import requests
-from rtree import index
-from sanic import Sanic
-from sanic import response
-from sanic import exceptions
-from sanic_cors import CORS, cross_origin
+from datetime import datetime
+
 from shapely.geometry import Point, shape, asPolygon, mapping, polygon
 from shapely.ops import cascaded_union
+from rtree import index
+
+from flask import Flask, request
+from flask_cors import CORS
+
+tz = pytz.timezone("US/Central")
 
 
 def spatial_index(features):
@@ -250,9 +249,10 @@ def get_total_trips(trips):
     return sum([int(trip["trip_count"]) for trip in trips])
 
 
+
 dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/census_tracts_2010_simplified_20pct_indexed.json")
-tz = pytz.timezone("US/Central")
+
 
 with open(source, "r") as fin:
 
@@ -260,12 +260,22 @@ with open(source, "r") as fin:
 
     census_tracts = json.loads(fin.read())
     idx = spatial_index(census_tracts[feature_id] for feature_id in census_tracts.keys())
-    app = Sanic(__name__)
+    app = Flask(__name__)
     CORS(app)
 
 
-@app.get("/trips", version=1)
-async def trip_handler(request):
+@app.route("/")
+def health_check():
+    now = datetime.now()
+    return (
+        "Micromobility API - Health Check - Available @ %s"
+        % now.strftime("%Y-%m-%d %H:%M:%S"),
+        200,
+    )
+
+
+@app.route("/v1/trips", methods=['GET'])
+def trip_handler():
     flow = parse_flow(request.args)
 
     flow_keys = get_flow_keys(flow)
@@ -296,30 +306,9 @@ async def trip_handler(request):
 
     response_data["intersect_feature"] = mapping(intersect_poly)
 
-    return response.json(response_data)
+    return json.dumps(response_data), 200
 
+# We only need this for local development.
+if __name__ == '__main__':
+    app.run()
 
-@app.route("/reload", version=1)
-async def index(request):
-    urllib.request.urlretrieve(
-        os.getenv("DATABASE_URL"), "/app/data/hex500_indexed.json"
-    )
-    return response.text("Reloaded")
-
-
-@app.route("/", version=1)
-async def index(request):
-    return response.text("Hello World")
-
-
-@app.exception(exceptions.NotFound)
-async def ignore_404s(request, exception):
-    return response.text("Page not found: {}".format(request.url))
-
-
-#
-# TODO: does this break the app deployment? Handy for local deve but seem to remember
-# TODO: a good reason for removing it
-#
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
