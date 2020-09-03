@@ -3,7 +3,7 @@ Dockless origin/destination trip data API
 # try me
 http://localhost:8000/v1/trips?xy=-97.75094341278084,30.276185988411257&flow=destination&mode=all
 """
-import argparse
+import pytz
 import json
 import os
 import requests
@@ -16,6 +16,7 @@ from rtree import index
 from flask import Flask, request
 from flask_cors import CORS
 
+tz = pytz.timezone("US/Central")
 
 
 def spatial_index(features):
@@ -251,6 +252,7 @@ def get_total_trips(trips):
 
 dirname = os.path.dirname(__file__)
 source = os.path.join(dirname, "data/census_tracts_2010_simplified_20pct_indexed.json")
+
 
 with open(source, "r") as fin:
 
