@@ -14,7 +14,7 @@ gunicorn==20.0.4
 hjson==3.0.1
 idna==2.10
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 jmespath==0.10.0
 kappa==0.6.0
 MarkupSafe==1.1.1
