@@ -8,7 +8,7 @@ click==7.1.2
 docutils==0.15.2
 durationpy==0.5
 Flask==1.1.2
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 future==0.18.2
 gunicorn==20.0.4
 hjson==3.0.1
